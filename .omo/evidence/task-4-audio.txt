@@ -1,0 +1,55 @@
+# Task 4 — Audio System Verification
+
+## 1. tsc --noEmit
+Command: npx tsc --noEmit
+Result: EXIT 0 (no errors)
+
+## 2. npm run build
+Result: EXIT 0
+- dist/index.html (0.68 kB)
+- dist/assets/index-*.js (456.72 kB, 115.79 kB gzip)
+- dist/audio/bgm.mp3 + dist/audio/sfx/*.mp3 copied from public/
+
+## 3. AudioManager API verification (npx tsx -e)
+```
+AudioManager.isMuted(): true
+Howler.mute(true) returned: object
+after unmute, isMuted(): false
+```
+Note: Howler global API has no `muted()` getter — only `mute(boolean)` setter.
+Verification uses `AudioManager.isMuted()` which tracks state internally.
+
+## 4. Fault tolerance (npx tsx -e, no WebAudio in node)
+```
+playBgm: OK (no throw)
+playSfx(jump): OK (no throw)
+playSfx(quest-complete): OK
+resume: OK (no throw)
+Howler.ctx: undefined (node, no WebAudio)
+```
+- playBgm/playSfx do not throw even without WebAudio context.
+- resume() guards `if (ctx && ctx.state === 'suspended')` — no throw when ctx undefined.
+- onloaderror/onplayerror handlers swallow missing/corrupt audio errors.
+
+## 5. Audio assets (public/audio/)
+All CC0 — self-generated via ffmpeg -f lavfi (sine + tremolo + fade), no third-party sampling.
+- bgm.mp3 (36 KB, 3s 220Hz tremolo loop placeholder)
+- sfx/jump.mp3 (2.5 KB, 0.15s 660Hz blip)
+- sfx/footstep.mp3 (1.9 KB, 0.08s 150Hz tap)
+- sfx/quest-complete.mp3 (5.7 KB, 0.4s 880Hz chime)
+- sfx/dialogue.mp3 (1.9 KB, 0.1s 500Hz click)
+- README.md documents CC0 source + freesound CC0 replacement guidance.
+
+## 6. src/audio.ts API
+- AudioManager singleton (module-level instance export)
+- playBgm(): lo-fi loop, volume 0.4, loop:true, no-throw, idempotent (no-op if already playing)
+- playSfx(name): 'jump'|'footstep'|'quest-complete'|'dialogue', volume 0.6, lazy-cached
+- setMuted(bool): calls Howler.mute(bool), tracks state in this.muted
+- isMuted(): returns tracked mute state
+- resume(): Howler.ctx?.resume() with suspended-state guard (for Task 15 Begin gesture unlock)
+
+## 7. Files NOT modified (per G17 / task constraints)
+- src/main.ts — untouched
+- src/scene.ts — untouched
+- src/cel-material.ts, src/types.ts, src/data/* — untouched
+- package.json: only howler + @types/howler added to deps (no tsx)

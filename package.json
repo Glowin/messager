@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/howler": "^2.2.13",
+    "howler": "^2.2.4",
     "three": "^0.161.0"
   },
   "devDependencies": {

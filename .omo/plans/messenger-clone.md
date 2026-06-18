@@ -378,7 +378,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 1）— `feat(render): cel-shading toon material + outline`
 
-- [ ] 4. 音频系统
+- [x] 4. 音频系统
 
   **What to do**:
   - 安装 `howler`（`@types/howler`）

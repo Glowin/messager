@@ -94,3 +94,37 @@
 - **Toon shader only uses .r channel** — so a 3-color gradient map with distinct RGB colors would NOT produce 3 distinct toon bands; only the R channel matters. Grayscale bands (R=G=B) are the correct way to get 3 brightness steps. This is why the task's "暗 0x404040 / 中 0xa0a0a0 / 亮 0xffffff" (grayscale) spec is right.
 - **OutlineEffect is WebGL-only** — confirmed; project uses WebGLRenderer (G17 preserveDrawingBuffer lock preserved, main.ts untouched).
 - **tsx is not a project dep** (same as Task 2) — `npx tsx -e` triggers one-time install; harmless for verification, do NOT add to package.json.
+
+# Task 4 Learnings — Audio System (src/audio.ts + Howler)
+
+## Files Added
+- `src/audio.ts` — AudioManager singleton (~110 lines). Exports `AudioManager` instance + `SfxName` type.
+- `public/audio/bgm.mp3` + `public/audio/sfx/{jump,footstep,quest-complete,dialogue}.mp3` — CC0 placeholders.
+- `public/audio/README.md` — CC0 source doc + freesound replacement guidance.
+
+## Dependencies Added
+- `howler@2.2.4` (runtime dep)
+- `@types/howler@2.2.12` (dev dep)
+- `tsx` NOT added (used via `npx tsx -e` for verification only — one-time install, harmless).
+
+## Key Decisions
+- **Howler global has NO `muted()` getter** — only `mute(boolean): this` setter. The task spec's `Howler.muted() === true` verification is impossible as written. Fix: `AudioManager` tracks mute state internally in `this.muted` and exposes `isMuted()`. The `Howl` *instance* does have `mute(): boolean` getter, but the global `Howler` does not. This is a @types/howler `HowlerGlobal` interface fact.
+- **Fault tolerance via onloaderror/onplayerror** — Howler swallows load/play errors via callbacks rather than throwing. Added empty-arrow-function handlers + outer try/catch as belt-and-suspenders. playBgm/playSfx never throw even when WebAudio is absent (verified in Node where `Howler.ctx === undefined`).
+- **resume() guards on `ctx && ctx.state === 'suspended'`** — in Node there's no WebAudio ctx; in browser it starts 'suspended' until user gesture. `void ctx.resume().catch(()=>{})` handles rejection if context is closed.
+- **bgm idempotent**: `playBgm()` no-ops if `this.bgm.playing()` is already true — prevents overlapping loops on repeated calls.
+- **sfx lazy-cached**: `sfxCache: Map<SfxName, Howl>` — first playSfx(name) creates+loads the Howl, subsequent calls reuse it. Howler dedupes concurrent plays of the same Howl automatically.
+- **Volumes**: bgm 0.4, sfx 0.6 (per spec). bgm `loop: true`, `html5: false` (WebAudio, not HTML5 Audio — better for games/low-latency sfx).
+- **CC0 audio self-generated via ffmpeg** — `ffmpeg -f lavfi -i "sine=..."` synthesizes tones with no third-party sampling, so inherently CC0. README documents freesound CC0 replacement candidates for later polish.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `npm run build`: exit 0; dist/audio/* copied from public/ by Vite.
+- `npx tsx -e` runtime: setMuted(true)→isMuted()=true; playBgm/playSfx/resume all no-throw in Node (no WebAudio).
+- lsp_diagnostics on audio.ts: no diagnostics.
+
+## Gotchas
+- **TS6133 on write-only private fields**: initially added `private bgmLoaded = false` for tracking, but only ever *wrote* to it (never read) → `noUnusedLocals` flagged TS6133. Removed it — Howler tracks load state internally via onload/onloaderror, so a separate flag was redundant. Lesson: under strict + noUnusedLocals, every private field must be read somewhere.
+- **`Howler.muted()` does not exist** — see Key Decisions. Don't trust task spec verification commands blindly; check the actual @types definitions.
+- **Howler.ctx is undefined in Node** — Howler only creates the AudioContext lazily in a browser environment. Any code touching `Howler.ctx` must null-guard. This is why `resume()` uses `if (ctx && ctx.state === 'suspended')`.
+- **Vite copies `public/` to `dist/` root** — so `public/audio/bgm.mp3` → `/audio/bgm.mp3` at runtime. Howl `src: ['/audio/bgm.mp3']` resolves correctly. No vite config change needed.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1 files untouched per task constraint).
