@@ -1,0 +1,28 @@
+=== npm run build ===
+
+> messager@0.0.0 build
+> tsc && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 6 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                  0.68 kB │ gzip:   0.37 kB
+dist/assets/index-BAyS20_u.js  456.72 kB │ gzip: 115.79 kB
+✓ built in 375ms
+
+=== EXIT CODE: 0 ===
+
+=== dist/ contents ===
+total 8
+drwxr-xr-x@  4 jiangbian  staff  128 Jun 19 03:35 .
+drwxr-xr-x@ 15 jiangbian  staff  480 Jun 19 03:35 ..
+drwxr-xr-x@  3 jiangbian  staff   96 Jun 19 03:35 assets
+-rw-r--r--@  1 jiangbian  staff  683 Jun 19 03:35 index.html
+
+=== dist/assets ===
+total 896
+drwxr-xr-x@ 3 jiangbian  staff      96 Jun 19 03:35 .
+drwxr-xr-x@ 4 jiangbian  staff     128 Jun 19 03:35 ..
+-rw-r--r--@ 1 jiangbian  staff  456722 Jun 19 03:35 index-BAyS20_u.js
