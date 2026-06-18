@@ -499,7 +499,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES — `feat(world): icosahedron planet + spherical gravity + surface snap`
 
-- [ ] 6. 角色低多边形模型 + 动画
+- [x] 6. 角色低多边形模型 + 动画
 
   **What to do**:
   - 创建 `src/character.ts`：

@@ -1,0 +1,50 @@
+=== Task 6: Character Low-Poly Model + Animation — Verification ===
+Date: 2026-06-19
+
+## 1. TypeScript Type Check
+Command: npx tsc --noEmit
+Result: EXIT 0 (strict mode, noUnusedLocals/Parameters clean)
+LSP diagnostics on src/character.ts: No diagnostics found
+
+## 2. Spec Verification Command
+Command: npx tsx -e "import {createCharacter,setAnimation,updateCharacter} from './src/character'; const c=createCharacter(); setAnimation(c,'walk'); updateCharacter(c,0); updateCharacter(c,0.5); console.log('children:',c.children.length,'ok')"
+Output: children: 3 ok
+
+## 3. Extended Runtime Verification
+- children (direct): 3 (bodyGroup, leftLeg, rightLeg)
+- meshes (total parts): 12 (<=15: true)
+- feet minY: -0.0000 (feet at origin ✓)
+- walk leftLeg.rotation.x: -0.3784 (sin(0.5*8)*0.5 = sin(4)*0.5 ≈ -0.3784)
+- walk rightLeg.rotation.x: 0.3784 (opposite phase ✓)
+- idle bodyGroup.position.y: 0.9182 (hipHeight 0.9 + sin(1*2)*0.02 ≈ 0.9+0.0182)
+- talk head.rotation.x: -0.0653 (sin(2*5)*0.12 ≈ -0.0653)
+
+## 4. Part Count (12 meshes, all toon material)
+ 1. body        — CapsuleGeometry(0.4, 0.8)    yellow  (0xffdd00)
+ 2. head        — IcosahedronGeometry(0.5, 0)  skin    (0xf0c8a0)
+ 3. hair        — SphereGeometry(0.52, 8, 6)   black   (0x1a1a1a) scale.y=0.5
+ 4. leftArm     — CapsuleGeometry(0.1, 0.5)    yellow  (0xffdd00)
+ 5. rightArm    — CapsuleGeometry(0.1, 0.5)    yellow  (0xffdd00)
+ 6. backpack    — BoxGeometry(0.45, 0.5, 0.25) brown   (0x8b4513)
+ 7. leftShorts  — CapsuleGeometry(0.13, 0.15)  red     (0xcc2222)
+ 8. leftSock    — CapsuleGeometry(0.12, 0.1)   white   (0xffffff)
+ 9. leftShoe    — BoxGeometry(0.3, 0.1, 0.45)  red     (0xcc2222)
+10. rightShorts — CapsuleGeometry(0.13, 0.15)  red     (0xcc2222)
+11. rightSock   — CapsuleGeometry(0.12, 0.1)   white   (0xffffff)
+12. rightShoe   — BoxGeometry(0.3, 0.1, 0.45)  red     (0xcc2222)
+
+## 5. Guardrail Compliance
+- G3: No external models loaded — all primitives ✓
+- No skeletal/bone animation — procedural sin ✓
+- Parts <= 15 — 12 meshes ✓
+- All materials via createToonMaterial() from './cel-material' ✓
+- Did NOT modify main.ts/scene.ts/other task files ✓
+- No TODOs left ✓
+
+## 6. Exports
+- createCharacter(): THREE.Group (feet at origin, facing +Z)
+- setAnimation(char, 'idle'|'walk'|'talk'): void
+- updateCharacter(char, time): void
+- AnimationState type exported
+
+VERDICT: ALL CHECKS PASSED

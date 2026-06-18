@@ -161,3 +161,38 @@
 - **`pos.clone().normalize()` in snapToSurface**: the clone is mandatory. `normalize()` mutates the vector it's called on. Without clone: `pos.normalize()` zeroes pos, then `multiplyScalar` scales zero → pos becomes (0,0,0). The spec's exact form `pos.copy(pos.clone().normalize().multiplyScalar(R+h))` is correct.
 - **Tangential velocity drift on sphere is physical, not a bug**: as an object with tangential velocity moves along the sphere, the radial direction (normal) rotates, so the decomposition's tangential component relative to the ORIGINAL frame drifts slightly. This is correct spherical physics. For the player (Task 9), tangential velocity is ~0 (movement via rotateOnAxis), so this is a non-issue.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1 files untouched per task constraint). planet mesh is exported but not added to scene — Task 12 will integrate.
+
+# Task 6 Learnings — Character Low-Poly Model + Animation (src/character.ts)
+
+## Files Added
+- `src/character.ts` — exports `createCharacter()`, `setAnimation(char, state)`, `updateCharacter(char, time)`, `AnimationState` type. ~190 lines. No changes to main.ts/scene.ts/other task files.
+
+## Key Decisions
+- **Leg pivots are `new THREE.Object3D()` (not Group/Mesh)** — lightweight transform nodes at hip height (y=0.9). Each holds 3 mesh children (shorts/sock/shoe) offset downward. Rotating `pivot.rotation.x` swings the entire leg. This is the standard pattern for procedural limb animation without bones.
+- **`bodyGroup` (THREE.Group) at hip height** holds torso/head/hair/arms/backpack. Its `position.y` is modulated for idle/talk breathing. Legs are siblings of bodyGroup (not children) so breathing doesn't move the feet.
+- **Shared materials per color** — 7 `createToonMaterial()` calls for 12 meshes (both shoes share one red material, both socks share one white material, etc.). Efficient and avoids 12 separate gradient map textures.
+- **Shared geometries per part type** — `shortsGeo`, `sockGeo`, `shoeGeo`, `armGeo` created once, reused for left/right. Good practice; reduces GPU buffer count.
+- **Procedural animation = reset-then-apply each frame**: `updateCharacter` first resets all limbs to neutral (rotation.x=0, bodyGroup.y=hipHeight, head.rotation.x=0), then applies the active state's sin offsets. This prevents accumulation drift and makes state transitions clean (no need for transition blending).
+- **`rotation.x` for leg swing is NOT G20 violation**: G20 prohibits `rotation.set()` for character ORIENTATION (facing direction on sphere — gimbal lock). Single-axis `rotation.x` for limb animation is standard and safe (gimbal lock only occurs with 2+ Euler axes). The spec's "rotateOnAxis" mention is imprecise — `rotateOnAxis` is incremental (accumulates), which is wrong for oscillation; `rotation.x = sin(t)*amp` is the correct approach.
+- **Feet at origin**: shoe is BoxGeometry(0.3, 0.1, 0.45) at y=-0.85 relative to leg pivot (y=0.9). Shoe center at 0.05, bottom at 0.0. Verified via `Box3.setFromObject` after `c.updateMatrixWorld(true)`.
+- **Character total height ~3.4 units** (feet to hair top) on planet radius 25 — about 14% of radius. Visible at gameplay scale. Task 9 can scale the Group if needed.
+
+## Animation Parameters
+- **walk**: `sin(time*8) * 0.5` rad leg swing, left/right opposite phase. Frequency 8/(2π) ≈ 1.27 Hz — reasonable walk cadence.
+- **idle**: `sin(time*2) * 0.02` upper body Y offset. Frequency 2/(2π) ≈ 0.32 Hz — calm breathing (~3s per cycle).
+- **talk**: breathing + `sin(time*5) * 0.12` rad head nod. Frequency 5/(2π) ≈ 0.8 Hz — natural nodding rate.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on character.ts: no diagnostics.
+- Runtime (`npx tsx -e`): children=3, meshes=12 (≤15), feet minY=-0.0000, walk legs swing ±0.3784 (opposite phase), idle bodyY=0.9182 (hip+breath), talk headRot=-0.0653.
+- Spec verification command: `children: 3 ok`.
+- Evidence: `.omo/evidence/task-6-character.txt`.
+
+## Gotchas
+- **`updateMatrixWorld(true)` on a child does NOT update the parent chain**: three.js `Object3D.updateMatrixWorld(force)` uses `this.parent.matrixWorld` as-is — it does NOT recursively update parents. So calling `mesh.updateMatrixWorld(true)` on a deeply nested mesh gives stale world matrices if ancestors weren't updated. Fix: call `root.updateMatrixWorld(true)` on the top-level Group first — this recursively updates all descendants top-down. This caused a false `minY=-0.9` (stale parent = identity matrix) in the initial verification script.
+- **`Box3.setFromObject` requires updated world matrices**: it internally calls `updateMatrixWorld` but only on the object passed, not ancestors. Always ensure the root's world matrix is fresh before computing bounding boxes of children.
+- **`CapsuleGeometry(radius, length)` total height = length + 2*radius**: the `length` parameter is the cylinder part only; hemispherical caps add `radius` on each end. Must account for this when stacking parts (shorts → sock → shoe) to avoid gaps or overlaps. E.g. `CapsuleGeometry(0.13, 0.15)` has total height 0.41, not 0.15.
+- **`IcosahedronGeometry(0.5)` defaults to detail=0** (20 faces) — perfect for low-poly look. No need to pass the second arg.
+- **`createToonMaterial` creates a new gradient map each call** — for 12 meshes this means 7 gradient textures (one per shared material). Could be optimized by sharing a single gradient map, but that would require changing cel-material.ts (Task 3's file). 7 textures is negligible overhead; not worth the cross-task coupling.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1/3 files untouched per task constraint).
