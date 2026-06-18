@@ -434,7 +434,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 1）— `feat(audio): howler bgm + sfx manager`
 
-- [ ] 5. 球形世界 + 重力系统（CRITICAL PATH）
+- [x] 5. 球形世界 + 重力系统（CRITICAL PATH）
 
   **What to do**:
   - 创建 `src/world.ts`：

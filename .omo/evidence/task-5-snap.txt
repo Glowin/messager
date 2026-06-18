@@ -1,0 +1,56 @@
+Task 5 — Spherical World + Gravity System
+============================================
+Date: 2026-06-19
+Files: src/world.ts, src/gravity.ts
+
+[1] npx tsc --noEmit
+---------------------------------------------
+EXIT_CODE=0 (strict, noUnusedLocals/Parameters clean)
+LSP diagnostics on world.ts: No diagnostics
+LSP diagnostics on gravity.ts: No diagnostics
+
+[2] snapToSurface + getSurfaceNormal runtime (npx tsx -e)
+---------------------------------------------
+snapToSurface(0,30,0, h=0) len: 25.0000 (expect 25)        PASS
+snapToSurface(0,30,0, h=1) len: 26.0000 (expect 26)        PASS
+getSurfaceNormal(0,30,0): [0.0000, 1.0000, 0.0000]         PASS (≈ (0,1,0))
+planet geometry type: IcosahedronGeometry                   PASS (G18 — NOT SphereGeometry)
+planet geometry is IcosahedronGeometry: true                PASS
+planetRadius: 25                                            PASS
+getSurfaceNormal(1,1,1): [0.5774, 0.5774, 0.5774]          PASS (off-axis)
+snapToSurface(3,4,0, h=0) len: 25.0000                      PASS (direction preserved: 15,20,0)
+
+[3] applyGravity jump arc + landing (npx tsx -e)
+---------------------------------------------
+GRAVITY: 9.8
+start pos len: 25 (north pole, on surface)
+jump impulse: 5 (outward radial)
+max altitude above surface: 1.2342                         PASS (jump left surface)
+landed: true at frame: 60                                  PASS (gravity pulled back)
+final pos len: 25.0000                                     PASS (snapped to surface)
+final radial velocity: 0.0000                              PASS (radial zeroed on landing)
+jump left surface: true
+returned to surface: true
+radial velocity zeroed: true
+
+[4] applyGravity edge cases
+---------------------------------------------
+resting object stays on surface: 25.0000 (60 frames)       PASS (no sinking)
+resting radial velocity: 0.0000                            PASS
+tangential preserved: 1.0000 -> 1.0011                     PASS (gravity only affects radial; tiny drift is physical — radial direction rotates as object moves on sphere)
+
+[5] Guardrail compliance
+---------------------------------------------
+G1  (no physics engine):   PASS — pure vector math, no cannon/rapier
+G18 (IcosahedronGeometry): PASS — verified instanceof IcosahedronGeometry
+G19 (no setFromUnitVectors): PASS — world.ts only returns normal vector; no orientation reconstruction (left to Task 9 rotateOnAxis)
+    grep setFromUnitVectors src/world.ts src/gravity.ts → no matches
+G4  (no custom shader):    PASS — uses createToonMaterial (MeshToonMaterial built-in)
+G17 (preserveDrawingBuffer): PASS — did NOT touch main.ts/scene.ts
+
+[6] Exports verified
+---------------------------------------------
+src/world.ts exports: planetRadius(=25), planet(Mesh), snapToSurface(pos,height=0), getSurfaceNormal(pos)
+src/gravity.ts exports: GRAVITY(=9.8), applyGravity(obj,velocity,dt,jumpVelocity?,height=0)
+
+VERDICT: ALL CHECKS PASS

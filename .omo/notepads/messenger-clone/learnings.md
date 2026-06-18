@@ -128,3 +128,36 @@
 - **Howler.ctx is undefined in Node** — Howler only creates the AudioContext lazily in a browser environment. Any code touching `Howler.ctx` must null-guard. This is why `resume()` uses `if (ctx && ctx.state === 'suspended')`.
 - **Vite copies `public/` to `dist/` root** — so `public/audio/bgm.mp3` → `/audio/bgm.mp3` at runtime. Howl `src: ['/audio/bgm.mp3']` resolves correctly. No vite config change needed.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1 files untouched per task constraint).
+
+# Task 5 Learnings — Spherical World + Gravity System (src/world.ts + src/gravity.ts)
+
+## Files Added
+- `src/world.ts` — exports `planetRadius`(=25), `planet` mesh (IcosahedronGeometry(25,5) + green toon), `snapToSurface(pos, height=0)`, `getSurfaceNormal(pos)`. ~75 lines.
+- `src/gravity.ts` — exports `GRAVITY`(=9.8), `applyGravity(obj, velocity, dt, jumpVelocity?, height=0)`. ~70 lines.
+
+## Key Decisions
+- **IcosahedronGeometry(25, 5)** — NOT SphereGeometry (G18). Detail 5 gives smooth low-poly sphere; flat-shaded facets pair with toon material. Planet centred at origin → surface normal = normalize(position) everywhere (no per-face normal lookup needed).
+- **snapToSurface mutates in place**: `pos.copy(pos.clone().normalize().multiplyScalar(planetRadius + height))`. The `.clone()` is essential — `normalize()` mutates, so without clone you'd normalize then scale the already-zeroed vector. Matches spec exactly.
+- **getSurfaceNormal returns a fresh clone** (`pos.clone().normalize()`) — caller can mutate freely without affecting the source position. Does NOT orient any object (G19: orientation is Task 9's job via incremental `rotateOnAxis`).
+- **applyGravity velocity decomposition**: radial = (v·n)·n, tangential = v − radial. Gravity only affects radial: `vRadial -= GRAVITY*dt`. Tangential preserved (for player, tangential ≈ 0 since movement is via rotateOnAxis in Task 9; for other objects, tangential velocity integration works too).
+- **Landing guard uses `rs < 0` (falling) not `rs <= 0`**: only zero radial velocity when the object is actually falling inward. If `rs > 0` (jumping, still near ground), don't snap — let it rise. This prevents killing a jump on frame 0 when the object hasn't left the ground yet. Resting objects: gravity makes rs negative each frame → landing triggers → snap + zero. Works correctly.
+- **jumpVelocity is OPTIONAL** (`jumpVelocity?: Vector3`): the EXPECTED OUTCOME spec says `applyGravity(obj, velocity, dt)` (3 params) while MUST DO says `applyGravity(obj, velocity, dt, jumpVelocity)` (4 params). Making it optional satisfies both. Caller can either pass jumpVelocity (applied as impulse at frame start) OR add it to velocity directly before calling — both work.
+- **height param (optional, default 0)**: spec mentions "planetRadius + height" for landing but signature doesn't include height. Added as 5th optional param with default 0. Player (Task 9) rests at height 0 (feet on surface, character origin at feet per Task 6). Other objects can pass a different height.
+- **GRAVITY = 9.8** exported as tunable const. With jumpForce=5, jump apex ≈ 1.23 units above surface, lands in ~60 frames (~1s at 60fps). Task 9 will tune jumpForce against this.
+- **planet NOT added to scene** — this module only constructs/exports the mesh. Adding to scene is the integrator's job (Task 12). Did NOT touch main.ts/scene.ts.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on world.ts + gravity.ts: no diagnostics.
+- Runtime (`npx tsx -e`): snapToSurface(0,30,0,h=0)→len 25.0000; snapToSurface(0,30,0,h=1)→len 26.0000; getSurfaceNormal(0,30,0)→[0,1,0]; planet geometry instanceof IcosahedronGeometry=true; off-axis (3,4,0) snap→len 25 direction (15,20,0) preserved.
+- applyGravity jump sim: jumpForce=5 → max altitude 1.2342, landed frame 60, final len 25.0000, radial velocity 0.0000. Resting object stays at 25.0000 over 60 frames. Tangential preserved (1.0000→1.0011, tiny drift is physical: radial direction rotates as object moves on sphere).
+- Evidence: `.omo/evidence/task-5-snap.txt`.
+- Guardrail grep: no `SphereGeometry`/`setFromUnitVectors`/`rotation.set`/`EffectComposer`/`cannon`/`rapier` in code (only in comments documenting the prohibitions).
+
+## Gotchas
+- **Spec signature conflict (EXPECTED OUTCOME vs MUST DO)**: EXPECTED OUTCOME says `applyGravity(obj, velocity, dt)` (3 params), MUST DO says `applyGravity(obj, velocity, dt, jumpVelocity: Vector3)` (4 params, jumpVelocity required). Resolution: make `jumpVelocity` optional (`jumpVelocity?: Vector3`). Both call styles work. This is the kind of inconsistency to resolve by making params optional, not by picking one spec over the other.
+- **`height` mentioned in MUST DO body but not in signature**: "落地（obj.position.length() ≤ planetRadius + height）" — height is referenced but not declared as a param. Added as optional 5th param with default 0. Don't silently use a magic constant; make it a parameter.
+- **Landing check must guard on velocity direction, not just position**: if you snap + zero radial whenever `|pos| <= groundRadius` (regardless of velocity direction), a jump that doesn't clear the ground in one frame gets killed immediately. Fix: only land when `rs < 0` (falling inward). Objects moving outward (jumping) are allowed to rise even if still at/below ground level on frame 0.
+- **`pos.clone().normalize()` in snapToSurface**: the clone is mandatory. `normalize()` mutates the vector it's called on. Without clone: `pos.normalize()` zeroes pos, then `multiplyScalar` scales zero → pos becomes (0,0,0). The spec's exact form `pos.copy(pos.clone().normalize().multiplyScalar(R+h))` is correct.
+- **Tangential velocity drift on sphere is physical, not a bug**: as an object with tangential velocity moves along the sphere, the radial direction (normal) rotates, so the decomposition's tangential component relative to the ORIGINAL frame drifts slightly. This is correct spherical physics. For the player (Task 9), tangential velocity is ~0 (movement via rotateOnAxis), so this is a non-issue.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1 files untouched per task constraint). planet mesh is exported but not added to scene — Task 12 will integrate.
