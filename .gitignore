@@ -1,0 +1,8 @@
+node_modules
+dist
+.omo/research
+.omo/boulder.json
+.omo/sessions
+.DS_Store
+.playwright-mcp
+
