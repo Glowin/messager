@@ -67,3 +67,30 @@
 - `tsx` is not a project dependency — `npx tsx` triggers a one-time install + npm warn. Harmless for verification; use `npx tsx -e` for inline scripts rather than adding tsx to devDependencies.
 - Did NOT touch `src/main.ts` / `src/scene.ts` (Task 1 files) — G17 preserveDrawingBuffer lock preserved.
 - `noUnusedLocals: true` is satisfied because data files only export — no local vars left dangling. The `COMPLETION_TEXT` const is used in all 5 quests.
+
+# Task 3 Learnings — Cel-Shading Material Module (src/cel-material.ts)
+
+## Files Added
+- `src/cel-material.ts` — exports `createGradientMap()`, `createToonMaterial(color)`, `createOutlineEffect(renderer)`. ~89 lines. No changes to main.ts/scene.ts (Wave 2 will integrate).
+
+## Key Decisions
+- **Gradient map = 3-pixel RGBAFormat DataTexture, grayscale bands** (0x40 / 0xa0 / 0xff). The toon fragment shader samples ONLY the `.r` channel (`vec3(texture2D(gradientMap, coord).r)` — confirmed in `gradientmap_pars_fragment.glsl.js`), so R carries the band brightness; G/B are equal (grayscale) for cleanliness. RGBAFormat chosen over RedFormat for robustness (matches official `webgl_materials_toon` example pattern).
+- **NearestFilter for BOTH mag AND min** (CRITICAL). LinearFilter would interpolate between bands → smooth gradient → no cel banding. Also set `generateMipmaps = false` (1D 3px texture, mipmaps meaningless).
+- **flatShading set AFTER construction, NOT in constructor params** — see Gotchas below. This was the single biggest subtlety of the task.
+- **No alphaTest on toon materials** — conflicts with OutlineEffect's outline pass (documented in JSDoc).
+- **OutlineEffect imported from `'three/examples/jsm/effects/OutlineEffect.js'`** — the `.js` extension is required under `moduleResolution: bundler` + `isolatedModules`. Types resolve via `@types/three/examples/jsm/effects/OutlineEffect.d.ts` automatically.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on cel-material.ts: no diagnostics.
+- Runtime (`npx tsx -e`): `type=MeshToonMaterial`, `magFilter=1003`, `minFilter=1003`, `flatShading=true`, `gradientMap_is_DataTexture=true`, `width=3 height=1 format=1023(RGBAFormat)`.
+- `createOutlineEffect` import resolves; arity=1 (renderer). Full runtime test deferred (needs WebGL context — Node tsx can't create WebGLRenderer); type-correctness covered by tsc.
+- Evidence: `.omo/evidence/task-3-filter.txt`.
+
+## Gotchas
+- **flatShading constructor-param trap (CRITICAL)**: `Material.setValues()` (Material.js L130-137) SKIPS any key whose `this[key]` is `undefined` (warns "'X' is not a property of THREE.MeshToonMaterial" and continues). The `Material` constructor NEVER initialises `this.flatShading` (only referenced in `toJSON` L379). So passing `flatShading: true` in the `MeshToonMaterial` constructor params is SILENTLY DROPPED — flatShading stays undefined, no FLAT_SHADED define emitted, no flat normals. **Fix**: construct first, then `material.flatShading = true` as a direct property assignment. Works because the shader program compiles lazily on first render, at which point `WebGLPrograms.js` (L302 `flatShading: material.flatShading === true`, L525 `if (parameters.flatShading)`) reads the assigned value and emits the define. No `needsUpdate` needed for a fresh (never-rendered) material.
+- **@types/three@0.161 type gap**: `flatShading` is declared in `MeshPhongMaterialParameters` / `MeshStandardMaterialParameters` / `MeshLambertMaterialParameters` / `MeshNormalMaterialParameters` / `MeshMatcapMaterialParameters` but NOT in `MeshToonMaterialParameters` (which `extends MaterialParameters`), and NOT in `Material.d.ts` at all. So `material.flatShading = true` is a TS error. **Fix**: narrow cast `(material as THREE.MeshToonMaterial & { flatShading: boolean }).flatShading = true`. Runtime fully supports it (see above); purely a type-definition omission.
+- **NearestFilter value is 1003, NOT 1004** (task spec had a typo). In three@0.161 `constants.js`: `NearestFilter = 1003`, `NearestMipmapNearestFilter = 1004`, `LinearFilter = 1006`. The correct verification criterion is `magFilter === THREE.NearestFilter` (1003===1003 ✓), not the literal 1004.
+- **Toon shader only uses .r channel** — so a 3-color gradient map with distinct RGB colors would NOT produce 3 distinct toon bands; only the R channel matters. Grayscale bands (R=G=B) are the correct way to get 3 brightness steps. This is why the task's "暗 0x404040 / 中 0xa0a0a0 / 亮 0xffffff" (grayscale) spec is right.
+- **OutlineEffect is WebGL-only** — confirmed; project uses WebGLRenderer (G17 preserveDrawingBuffer lock preserved, main.ts untouched).
+- **tsx is not a project dep** (same as Task 2) — `npx tsx -e` triggers one-time install; harmless for verification, do NOT add to package.json.

@@ -1,0 +1,9 @@
+type=MeshToonMaterial
+magFilter=1003 (NearestFilter=1003)
+minFilter=1003 (NearestFilter=1003)
+flatShading=true
+gradientMap_is_DataTexture=true
+gradientMap_width=3_height=1_format=1023 (RGBAFormat=1023)
+createOutlineEffect typeof=function
+createOutlineEffect.length=1 (expected 1: renderer)
+NOTE: NearestFilter in three@0.161 is 1003, NOT 1004. 1004 == NearestMipmapNearestFilter. Task spec had a typo; magFilter===THREE.NearestFilter (1003===1003) is the correct criterion and is satisfied.

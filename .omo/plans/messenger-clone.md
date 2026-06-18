@@ -261,7 +261,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES — `chore(scaffold): vite+ts+three.js + renderer(preserveDrawingBuffer)`
 
-- [ ] 2. 类型定义 & 数据模型
+- [x] 2. 类型定义 & 数据模型
 
   **What to do**:
   - 创建 `src/types.ts`，定义核心接口：
@@ -321,7 +321,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group with Wave 1）— `feat(data): quest/npc/dialogue types + 5 quests + 5 npcs`
 
-- [ ] 3. cel-shading 材质模块
+- [x] 3. cel-shading 材质模块
 
   **What to do**:
   - 创建 `src/cel-material.ts`：
