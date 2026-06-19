@@ -1,0 +1,52 @@
+Task 15 — Title Screen + Opening Dialogue Cutscene (src/intro.ts)
+================================================================
+
+## File Added
+- src/intro.ts — exports createIntro(onStart) → { show, getState }, IntroState type, Intro interface. ~200 lines (incl. injected CSS string). No changes to main.ts/scene.ts/other task files.
+
+## Verification 1: npx tsc --noEmit
+Command: npx tsc --noEmit
+Result: exit 0 (strict, noUnusedLocals/Parameters clean)
+lsp_diagnostics on intro.ts: no diagnostics
+
+## Verification 2: tsx state test (mandatory)
+Command: npx tsx -e "import {createIntro} from './src/intro'; const i=createIntro(()=>{}); console.log('state:', i.getState())"
+Output:
+  state: title
+Result: exit 0
+
+## Verification 3: structural test
+Command: npx tsx -e (comprehensive)
+Output:
+  has_show: true
+  has_getState: true
+  state: title
+  state_after_show: title
+  EXIT_OK
+Result: exit 0
+
+## State Machine
+- title (initial) → intro (after Begin click/Enter/Space + AudioManager.resume()) → playing (after 2-line dialogue onComplete → onStart())
+- getState() returns 'title' | 'intro' | 'playing'
+
+## Title Screen
+- Full-screen overlay (position:fixed, z-index:200) mounted to #app
+- Cyan gradient background (linear-gradient #7dd3fc → #0891b2) evoking original game's water/sky
+- Radial glow behind title (atmospheric depth)
+- "MESSENGER" title: white, clamp(48px,13vw,148px), weight 800, letter-spacing 0.14em, text-shadow
+- "A delivery adventure" subtitle: white 82% opacity, uppercase, letter-spacing 0.32em
+- Yellow Begin button (#fbbf24): bottom 15% center, pill shape, 3D press effect (box-shadow bottom), pulsing glow animation
+- Hint text: "Press Enter or click to begin"
+- Begin button: autofocus + focus-visible outline, click + Enter/Space (window keydown listener)
+
+## Opening Dialogue (2 lines, speaker: "messenger")
+1. "LOOKS LIKE I SLEPT IN... I BETTER START TODAY'S DELIVERIES."
+2. "I'VE GOT FIVE ON THE LIST. HOPEFULLY THEY'RE EASY TO FIND."
+- Dynamic import: const { showDialogue } = await import('./ui/dialogue')
+- onComplete → state='playing' + onStart()
+
+## Design System Compliance
+- Font: var(--ui-font, 'Nunito', ...) — reuses dialogue.css design token
+- No hardcoded magic numbers for font family (uses CSS variable with fallback)
+- Yellow button color (#fbbf24) is title-screen-specific (not a dialogue token) — original game convention
+- Styles JS-injected (tsx compatibility, no CSS import)

@@ -1020,7 +1020,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES — `feat(interaction): E key dialogue + quest pickup + delivery completion`
 
-- [ ] 15. 标题屏 + 开场过场
+- [x] 15. 标题屏 + 开场过场
 
   **What to do**:
   - 创建 `src/intro.ts` + `src/ui/title.css`：
