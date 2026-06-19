@@ -538,3 +538,45 @@
 - **`AudioManager` import is tsx-safe** — Task 4 verified that importing audio.ts in tsx works (Howler loads in Node without throwing). `AudioManager.isMuted()` is only called from `show()` and `toggleMute()`, neither of which is called in the tsx verification command. So no audio side effects in verification.
 - **`quests` import from `../data/quests` is pure data** — No side effects, tsx-safe. Used in `update()` to look up `steps[currentStep].objectiveText` by quest ID. The path from `src/ui/hud.ts` is `../data/quests`.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Integration Task Learnings — Rewrite src/main.ts (wire all 16 modules)
+
+## File Changed
+- `src/main.ts` — rewritten from 41-line empty-scene scaffold to ~110-line full integration. Only file changed; all 16 module files untouched.
+
+## Key Decisions
+- **`effect.render(scene, camera)` NOT `renderer.render()`** — OutlineEffect (Task 3) wraps the renderer. The render loop MUST call `effect.render()` or cel outlines are silently lost. This is the single most critical integration detail. The original scaffold used `renderer.render()` (no OutlineEffect existed yet).
+- **`createScene()` camera discarded** — `createScene()` returns `{ scene, camera }` but the default camera is replaced by `createFollowCamera()`. Destructure only `scene`: `const { scene } = createScene()`. The follow camera handles all gameplay framing.
+- **Player disabled during title/intro** — `player.setEnabled(false)` before `intro.show()`. The `onStart` callback (fired after opening dialogue) calls `hud.show()` + `player.setEnabled(true)`. Without this, WASD input would register during the title screen (player's keydown listener is active immediately on `createPlayer()`).
+- **Debug API pause/resume via synthetic Escape keydown** — The HUD (Task 16) has no public `pause()`/`resume()` methods; pause is toggled internally via an Escape keydown listener. To control pause from the debug API without modifying hud.ts, dispatch `new KeyboardEvent('keydown', { code: 'Escape' })` on `window`. The HUD's listener catches it and toggles `openPauseMenu()`/`closePauseMenu()`. Guarded by `if (!hud.isPaused)` / `if (hud.isPaused)` to ensure idempotency (pause when not paused, resume when paused).
+- **`getState()` returns live snapshot** — Each debug API getter calls `getState()` fresh, so `window.__game.getPlayer()` always reflects current player position. The tuples `[x, y, z]` are extracted from `Vector3.x/.y/.z` (not `toArray()` — explicit and clear).
+- **Main loop conditional: `intro.getState() === 'playing' && !hud.isPaused`** — Simulation (player, interaction, NPCs, camera) only runs when the intro is done AND the HUD isn't paused. Rendering (`effect.render`) and `hud.update()` run every frame regardless (frozen frame behind pause menu, HUD objective refresh).
+- **`clock.getDelta()` then `clock.elapsedTime`** — `getDelta()` updates `elapsedTime` internally (adds the delta). So reading `elapsedTime` immediately after `getDelta()` gives the correct total time. Order matters: `const dt = clock.getDelta(); const time = clock.elapsedTime;`.
+- **`updateNpcs(time)` uses `time` not `dt`** — NPC animation (marker float/spin, idle breathing) is time-based (sin waves), so it takes elapsed time. Player update takes both `dt` (for frame-rate-independent movement) and `time` (for animation).
+- **No BGM autoplay** — The task spec doesn't mention calling `AudioManager.playBgm()`. The intro calls `AudioManager.resume()` (unlock audio context on user gesture). BGM could be added in `onStart` if desired, but the spec is specific about what to wire.
+
+## Module Wiring Order (matters for dependencies)
+1. Renderer + OutlineEffect (no deps)
+2. Scene (no deps)
+3. planet, regions, NPCs, player → add to scene (depend on world/cel-material)
+4. Follow camera (depends on world for getSurfaceNormal)
+5. Interaction (depends on player + npcs + questManager — `createNpcs()` MUST be called first to populate npc.ts module-level `instances` registry)
+6. HUD (depends on questManager)
+7. Intro (depends on audio — onStart callback references hud + player)
+8. Debug API (depends on all above — getState closure captures everything)
+9. Main loop (references all above)
+10. `intro.show()` last (starts the title screen)
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on main.ts: no diagnostics.
+- `npm run build`: exit 0, 29 modules transformed, dist/assets/index-*.js 562 KB (146 KB gzip). Up from 457 KB (116 KB gzip) in Task 1 — all 16 modules now bundled. dialogue module code-split via dynamic import (1.82 KB separate chunk).
+- `npm run dev`: starts in 87ms, `curl http://localhost:5173/` → HTTP 200, `curl http://localhost:5173/src/main.ts` → HTTP 200.
+- Evidence: `.omo/evidence/integration.txt`.
+
+## Gotchas
+- **`questManager` is a value import, not a class instantiation** — `import { questManager } from './quest'` gives the singleton instance directly. Do NOT write `const questManager = questManager` (self-assignment) or `new QuestManager()` (creates a separate instance with fresh quest states, breaking the singleton contract with interaction/hud).
+- **HUD pause listener registered in `show()`, not at construction** — `createHud()` doesn't register the Escape listener; `hud.show()` does. So the debug API's synthetic Escape dispatch only works AFTER `hud.show()` has been called (i.e., after the intro completes). Before that, the game is gated by `intro.getState() !== 'playing'` anyway, so pause is effectively always on during the title screen.
+- **`createInteraction`'s `_npcGroup` parameter is unused but required** — `createInteraction(player, npcs, questManager)` must pass the NPC group for API signature compatibility, even though `getNearestNpc` uses npc.ts's internal `instances` registry. The parameter is prefixed `_` in interaction.ts. Omitting it would be a type error.
+- **Bundle size warning (562 KB > 500 KB)** — Vite warns about chunks > 500 KB. This is expected: three.js (~150 KB gzip) + 16 game modules + Howler. The warning is harmless for a game. Could be mitigated with manualChunks but that's an optimization, not a correctness issue.
+- **29 modules transformed (up from ~5 in Task 1)** — All 16 task modules + three.js internals + Howler are now in the dependency graph. The dialogue module is a separate chunk (dynamic import from interaction.ts and intro.ts).

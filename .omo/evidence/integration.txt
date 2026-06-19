@@ -1,0 +1,72 @@
+# Integration Task — Rewrite src/main.ts (all 16 modules wired)
+
+## Verification 1: npx tsc --noEmit
+```
+$ npx tsc --noEmit
+EXIT: 0
+```
+No diagnostics. lsp_diagnostics on src/main.ts: "No diagnostics found".
+
+## Verification 2: npm run build
+```
+$ npm run build
+
+> messager@0.0.1 build
+> tsc && vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 29 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                      0.68 kB │ gzip:   0.36 kB
+dist/assets/dialogue-Dn01H9MX.css    1.99 kB │ gzip:   0.91 kB
+dist/assets/dialogue-DCez9MCH.js     1.82 kB │ gzip:   0.79 kB
+dist/assets/index-Diz5UzF_.js      562.01 kB │ gzip: 146.09 kB
+✓ built in 514ms
+EXIT: 0
+```
+29 modules transformed (all 16 task modules + deps integrated).
+dialogue module code-split via dynamic import (Task 14/15 pattern).
+
+## Verification 3: npm run dev + curl
+```
+$ npm run dev
+  VITE v5.4.21  ready in 87 ms
+  ➜  Local: http://localhost:5173/
+
+$ curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:5173/
+HTTP 200
+
+$ curl -s -o /dev/null -w "HTTP %{http_code}\n" http://localhost:5173/src/main.ts
+HTTP 200
+```
+
+## Integration Summary
+src/main.ts rewritten (41 → ~110 lines) to wire all 16 modules:
+- WebGLRenderer with preserveDrawingBuffer:true (G17) + antialias
+- createOutlineEffect(renderer) → effect.render(scene, camera) in loop
+- createScene() → scene (default camera discarded)
+- scene.add(planet) — spherical world
+- scene.add(createRegions()) — 3 regions
+- scene.add(createNpcs()) — 5 NPCs
+- scene.add(createPlayer().group) — player
+- createFollowCamera() → { camera, update } (replaces default camera)
+- questManager singleton from ./quest
+- createInteraction(player, npcs, questManager)
+- createHud(questManager)
+- createIntro(onStart) — onStart: hud.show() + player.setEnabled(true)
+- installDebugApi(getState) — live state snapshot + teleport/completeQuest/pause/resume
+- Main loop: clock.getDelta/elapsedTime, tickFps, conditional update (playing && !paused), effect.render
+- Resize handler updates follow camera aspect + renderer size
+- intro.show() at startup
+
+## Debug API (window.__game, DEV only)
+getState() returns:
+- player: { position: [x,y,z], up: [x,y,z] }
+- camera: { position: [x,y,z], up: [x,y,z] }
+- scene, renderer (live refs)
+- quests: questManager.getQuests()
+- teleport: (x,y,z) => player.position.set(x,y,z)
+- completeQuest: (id) => questManager.completeQuest(id)
+- pause/resume: synthetic Escape keydown toggles HUD pause state
