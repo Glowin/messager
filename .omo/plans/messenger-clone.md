@@ -1135,19 +1135,19 @@ Max Concurrent: 5 (Wave 3)
 
 > 4 个 review agent 并行。全部 APPROVE 才算通过。汇总结果给用户，获明确"okay"后才算完成。
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   逐条核对 Must Have：读文件/curl/跑命令验证实现存在；逐条核对 Must NOT Have：搜代码库禁用模式（SphereGeometry/setFromUnitVectors/EffectComposer/物理引擎/Euler rotation.set），发现即 file:line 拒绝。检查 `.omo/evidence/` 证据文件齐全。对比交付物与计划。
   Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT: APPROVE/REJECT`
 
-- [ ] F2. **Code Quality Review** — `unspecified-high`
+- [x] F2. **Code Quality Review** — `unspecified-high`
   跑 `npm run build`（必须无错）。审查所有改动文件：type 抑制、空 catch、debug 日志、注释残留代码、未用 import。AI slop：过度注释、过度抽象、泛型名(data/result/item/temp)。验证 `preserveDrawingBuffer:true`、`window.__game` DEV 守卫、OutlineEffect 用 `effect.render()`。
   Output: `Build [PASS/FAIL] | Lint [PASS/FAIL] | Files [N clean/N issues] | VERDICT`
 
-- [ ] F3. **Real Manual QA** — `unspecified-high` + `playwright` skill
+- [x] F3. **Real Manual QA** — `unspecified-high` + `playwright` skill
   从干净状态执行每个 task 的 QA 场景——跟随精确步骤、抓证据。测跨任务集成（移动→找NPC→对话→接任务→配送→完成 全流程）。测边界：极点传送、空状态、连续按键、Esc 暂停。存 `.omo/evidence/final-qa/`。
   Output: `Scenarios [N/N pass] | Integration [N/N] | Edge Cases [N tested] | VERDICT`
 
-- [ ] F4. **Scope Fidelity Check** — `deep`
+- [x] F4. **Scope Fidelity Check** — `deep`
   每个 task：读"What to do"，读实际 diff（git log/diff），1:1 核对——计划的都建了（无遗漏），没建超计划的（无 creep）。查"Must NOT do"合规。查跨任务污染（Task N 动了 Task M 的文件）。标记未说明改动。
   Output: `Tasks [N/N compliant] | Contamination [CLEAN/N issues] | Unaccounted [CLEAN/N files] | VERDICT`
 
