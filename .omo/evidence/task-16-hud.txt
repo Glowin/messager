@@ -1,0 +1,52 @@
+Task 16 — UI & HUD (src/ui/hud.ts)
+====================================
+Date: 2026-06-19
+
+## File Created
+- src/ui/hud.ts — exports createHud(questManager) → {update, show, hide, isPaused}. ~280 lines (incl. injected CSS string). No changes to main.ts/scene.ts/other task files.
+
+## Verification Results
+
+### 1. npx tsc --noEmit
+EXIT: 0 (strict, noUnusedLocals/Parameters clean)
+
+### 2. lsp_diagnostics on src/ui/hud.ts
+No diagnostics found
+
+### 3. Spec verification command
+$ npx tsx -e "import {createHud} from './src/ui/hud'; const h=createHud({getQuests:()=>[]}); console.log('paused:', h.isPaused, 'ok')"
+Output: paused: false ok
+EXIT: 0
+
+### 4. Comprehensive API structure test
+has_show: true
+has_hide: true
+has_update: true
+has_isPaused: true
+isPaused: false
+update_no_throw: true
+hide_no_throw: true
+EXIT: 0
+
+### 5. Quest data lookup logic (update() internals)
+objective: FIND THE RED CLIFF HOUSE AND GET THE LETTER BACK
+expected: FIND THE RED CLIFF HOUSE AND GET THE LETTER BACK
+match: true
+EXIT: 0
+
+## API Summary
+- createHud(questManager): Hud
+  - show(): mounts HUD overlay to #app (menu btn ☰ + sound btn ♪ + objective text div); registers Esc keydown listener
+  - hide(): removes HUD, closes pause menu if open, removes keydown listener
+  - update(): per-frame — reads questManager.getQuests(), finds active quest's current step objectiveText, displays in top-right small text (cached, only updates DOM on change)
+  - isPaused (getter): true when pause menu is open
+
+## Design Decisions
+- Styles JS-injected (ensureStyles + HUD_CSS const) — tsx compatible, no CSS import
+- Design tokens reused via var(--ui-font/--ui-blue/--ui-bg/etc) with fallbacks
+- Dark semi-transparent buttons (rgba(15,23,42,0.72) + backdrop-filter blur) — readable against any game background
+- Mute state: red diagonal line via ::after on .hud-btn--muted
+- Pause menu: z-index 120 (above dialogue z-100), white card + blue PAUSED title + resume/quit buttons
+- Quit to title: window.location.reload() (no main.ts modification needed)
+- pointer-events: none on root, auto on buttons (non-blocking HUD)
+- QuestManagerLike structural interface (accepts QuestManager instance or {getQuests:()=>[]} test doubles)

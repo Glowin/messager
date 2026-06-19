@@ -1080,7 +1080,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES — `feat(intro): title screen + opening dialogue cutscene`
 
-- [ ] 16. UI & HUD
+- [x] 16. UI & HUD
 
   **What to do**:
   - 创建 `src/ui/hud.ts` + `src/ui/hud.css`：
