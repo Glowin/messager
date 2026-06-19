@@ -738,7 +738,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES — `feat(player): spherical movement controller + jump + sprint`
 
-- [ ] 10. NPC 系统
+- [x] 10. NPC 系统
 
   **What to do**:
   - 创建 `src/npc.ts`：

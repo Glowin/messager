@@ -301,3 +301,32 @@
 - **`snapToSurface` safety after grounded movement**: Even though `position.applyQuaternion(q)` preserves the position length (rotation around origin), floating-point precision can cause tiny drift. Adding `if (isGrounded) snapToSurface(group.position, 0)` after movement ensures the player is always exactly on the surface.
 - **`e.preventDefault()` on all mapped keys**: Space (page scroll), arrow keys (page scroll) must have default prevented. Calling `e.preventDefault()` for all mapped keys (WASD, arrows, Space, Shift) is safe and prevents unwanted browser behavior.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Task 10 Learnings — NPC System (src/npc.ts)
+
+## Files Added
+- `src/npc.ts` — exports `createNpcs()`, `getNearestNpc(playerPos, threshold=3)`, `updateNpcs(time)`. ~190 lines. No changes to main.ts/scene.ts/other task files.
+
+## Key Decisions
+- **NPC recolouring via post-creation material swap**: `createCharacter()` (Task 6) doesn't accept colour params and we can't modify it (task constraint: no modifying other task files). Solution: after `createCharacter()`, traverse the group and replace any mesh whose material colour matches `SHIRT_COLOR` (0xffdd00) with a new `createToonMaterial(npc.color)`. This swaps the shirt (torso + both arms share one material in character.ts) while preserving skin/hair/shorts/socks/shoes/backpack. Each NPC gets a distinct shirt colour (worker=gray, kid=gold, dave=royal blue, doctor=white, caveman=saddle brown).
+- **One-time `setFromUnitVectors` for static NPC orientation is G19/G20 compliant**: G19/G20 prohibit RUNTIME absolute orientation reconstruction (causes south-pole lockup during movement). Static NPCs are oriented ONCE at creation via `quaternion.setFromUnitVectors((0,1,0), surfaceNormal)`. This is explicitly safe per Task 9 learnings: "G19/G20 prohibit RUNTIME absolute reconstruction, not one-time initial setup." None of the 5 NPC positions are at the exact south pole, so `setFromUnitVectors` has no opposite-vector edge case.
+- **Cone marker pointing down via `rotation.x = Math.PI`**: `ConeGeometry` defaults to apex-up. Rotating π around X flips it to apex-down. Setting `rotation.y` afterwards (for spin) works correctly with Euler 'XYZ' order: the Y rotation is applied in local space after the X flip, spinning the cone around its (now downward) axis. With 4 radial segments (pyramid), the spin is visually visible.
+- **Marker float + spin in one mesh (no parent group needed)**: `marker.position.y = baseY + sin(t)*amp` (float) and `marker.rotation.y = t * speed` (spin) can both be set on the same mesh. The `rotation.x = π` stays constant (set once at creation), only `rotation.y` changes per frame. No need for a separate markerGroup parent.
+- **Name tag as THREE.Sprite with CanvasTexture**: Sprite always faces the camera (billboard) — no manual screen-space projection needed. Canvas (256×64) draws red rounded rect + white uppercase text. `SpriteMaterial` (not toon) is correct — sprites are billboards that don't participate in cel-shading.
+- **`typeof document !== 'undefined'` guard for Node compatibility**: `createNameTag` uses `document.createElement('canvas')` which doesn't exist in Node (tsx verification). The guard makes the sprite fall back to plain red colour (no text) in Node, while the full canvas texture renders in browser. The NPC group structure is intact in both environments — structural assertions (children count, userData.npcId) work in Node.
+- **Module-level `instances` array**: Populated by `createNpcs()`, consumed by `getNearestNpc()` and `updateNpcs()`. Cleared (`length = 0`) at the start of each `createNpcs()` call to prevent stale references if called multiple times. This avoids the need to pass the NPC list around or attach it to the returned group's userData.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on npc.ts: no diagnostics.
+- Runtime (`npx tsx -e`): 11 checks pass — npc_count=5, structure_ok (1 char + 1 marker + 1 nameTag per NPC), all positions on sphere (len=25.00), getNearestNpc returns correct NPC (kid at (0,25,0), worker at worker pos), returns null when far (south pole, threshold 3), updateNpcs no error, marker floats (y=4.021), marker spins (rotY=2.250), marker points down (rotation.x=π).
+- Spec verification command: `npcs: 5 nearest: kid` ✓
+- Evidence: `.omo/evidence/task-10-npc.txt`.
+
+## Gotchas
+- **`mat.color.getHex()` for material colour comparison**: `MeshToonMaterial.color` is a `THREE.Color` object. To compare against a hex value, use `mat.color.getHex() === 0xffdd00`, NOT `mat.color === 0xffdd00` (object vs number). The `getHex()` method returns the numeric hex value.
+- **`SpriteMaterial` vs `MeshToonMaterial` for name tags**: Sprites use `SpriteMaterial` (billboard, always faces camera, not cel-shaded). Do NOT use `createToonMaterial` for sprites — toon materials are for 3D meshes that participate in the lighting/gradient pipeline. Sprites bypass that pipeline entirely.
+- **CanvasTexture in Node**: `THREE.CanvasTexture` requires a canvas element from `document.createElement('canvas')`. In Node, `document` is undefined. Must guard with `typeof document !== 'undefined'` before creating canvas. The `SpriteMaterial` can be created without a map (just colour), so the sprite still exists in Node — it just has no text.
+- **`getNearestNpc` distance is 3D straight-line, not surface arc**: Both player and NPC are on the sphere surface (radius 25). For small thresholds (3 units), straight-line distance ≈ surface arc distance. For a threshold of 3 on radius 25, the arc length is ~3.0 and the chord length is ~3.0 (difference is negligible for small angles). This is simpler and sufficient for proximity detection.
+- **NPC data positions are pre-snap values**: The `npcs` data has positions like `[-18, 17, 0]` (length 24.76) and `[0, 25, 0]` (length 25). `snapToSurface` normalises and scales to exactly 25. After snapping, all 5 NPCs are at exactly radius 25. The pre-snap values are close to the surface but not exact — `snapToSurface` fixes this.
+- **Did NOT touch main.ts/scene.ts/character.ts** (G17 preserveDrawingBuffer lock preserved; character.ts is Task 6's file — recolouring done via post-creation traversal, not modification; integration deferred to Wave 4 per task constraint).

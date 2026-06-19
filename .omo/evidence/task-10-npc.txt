@@ -1,0 +1,23 @@
+Task 10 — NPC System (src/npc.ts)
+==================================
+
+1. tsc --noEmit: EXIT 0
+2. lsp_diagnostics on npc.ts: No diagnostics found
+3. Runtime verification (npx tsx -e):
+
+   1. npc_count: 5
+   2. structure_ok: true (each NPC: 1 character Group + 1 ConeGeometry marker + 1 Sprite nameTag)
+   3. positions: [{"id":"worker","len":"25.00"},{"id":"kid","len":"25.00"},{"id":"dave","len":"25.00"},{"id":"doctor","len":"25.00"},{"id":"caveman","len":"25.00"}]
+   4. nearest_at_kid: kid (player at (0,25,0), threshold 5)
+   5. nearest_far_null: true (player at south pole (0,-25,0), threshold 3 → null)
+   6. nearest_at_worker: worker (player at worker position, threshold 3)
+   7. updateNpcs_ok: true (no error at time=1.5)
+   8. marker_floats: true y=4.021 (base 4.0 + sin offset)
+   9. marker_spins: true rotY=2.250 (time * 1.5)
+   10. marker_points_down: true (rotation.x = π)
+   11. at_kid_close: kid (player at (0,25,0), threshold 0.1 → kid, distance=0)
+
+4. Spec verification command output:
+   npcs: 5 nearest: kid
+
+Exports: createNpcs, getNearestNpc, updateNpcs
