@@ -904,7 +904,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 3）— `feat(world): 3 regions low-poly layout + landmarks`
 
-- [ ] 13. 第三人称相机
+- [x] 13. 第三人称相机
 
   **What to do**:
   - 创建 `src/camera.ts`：

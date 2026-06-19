@@ -390,3 +390,43 @@
 - **`CylinderGeometry` for water/sand discs** — Using `CylinderGeometry(radius, radius, height, 16)` (same top/bottom radius) produces a flat disc. The 16 radial segments give a smooth-enough circle for low-poly aesthetic. Height 0.1-0.15 keeps them thin (flat on the surface). `position.y = height/2` puts the bottom at the surface.
 - **Object internal y-offsets become normal-aligned after orientation** — When `placeObject` sets `quaternion.setFromUnitVectors(UP, normal)`, the object's local +Y axis aligns with the surface normal. All internal mesh y-offsets (e.g., house body at y=h/2, roof at y=h+h*0.3) then extend along the normal (away from sphere center). This is the correct behavior — objects "stand up" on the sphere surface.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Task 13 Learnings — Third-Person Follow Camera (src/camera.ts)
+
+## Files Added
+- `src/camera.ts` — exports `createFollowCamera()` → `{ camera: THREE.PerspectiveCamera, update(target: THREE.Object3D) }`. ~57 lines. No changes to main.ts/scene.ts/other task files.
+
+## Key Decisions
+- **CRITICAL: `getWorldDirection()` in three@0.161.0 returns +Z, NOT -Z** — The Task 9 learning states "getWorldDirection() returns -Z" but this is WRONG for three@0.161.0. The actual source (`node_modules/three/src/core/Object3D.js` L508-516) shows `target.set(e[8], e[9], e[10])` WITHOUT negation. So `getWorldDirection()` returns the local +Z axis in world space = the character's FACING direction (Task 6 character faces +Z). This means the spec formula `camPos = target.position + up*4 - dir*7` is correct as-is: `dir` = facing, so `-dir` = behind. Do NOT "correct" the sign to `+dir` based on the Task 9 learning — that would put the camera IN FRONT of the player.
+- **`camera.lookAt()` does NOT modify `camera.up`** — The `up` vector is an INPUT to `lookAt` (determines roll orientation), not an output. After `camera.up.copy(surfaceNormal)` + `camera.lookAt(target)`, `camera.up` remains `surfaceNormal`. This is why `cam.up.dot(surfaceNormal) === 1.0` exactly (not just > 0.95) — they're the same vector.
+- **First-frame snap (`initialized` flag) avoids long lerp sweep** — On the first `update()` call, `camera.position.copy(camPos)` snaps directly to the target. Subsequent calls use `lerp(camPos, 0.1)`. Without this, the camera would slowly sweep from its initial position (0,30,30) to the player over ~50 frames, which looks bad at game start.
+- **`typeof window !== 'undefined'` guard for aspect ratio** — In Node (tsx verification), `window` doesn't exist. The guard sets aspect=1 in Node, allowing the camera to be created and updated for testing. Same pattern as Task 9 (player.ts).
+- **No CSS imports (tsx compatibility)** — camera.ts has a mandatory `npx tsx` verification. CSS imports would break tsx (same as Task 8/11/12 gotcha). Pure TypeScript with no side-effect imports.
+- **Reused `dir` and `camPos` Vector3 objects** — Allocated once in `createFollowCamera()` closure, reused every frame. Avoids per-frame allocation. `getWorldDirection(dir)` writes into the provided target vector; `addScaledVector` modifies `camPos` in place.
+
+## Camera Math (verified)
+- **North pole (0,25,0), identity orientation (facing +Z)**:
+  - up = (0,1,0), dir = getWorldDirection() = (0,0,1) [facing +Z]
+  - camPos = (0,25,0) + (0,4,0) - (0,0,1)*7 = (0,29,-7) — behind (-Z) and above (+Y) ✓
+  - |camPos| = 29.83 > 25 (outside planet) ✓
+- **South pole (0,-25,0), oriented local-Y=(0,-1,0)**:
+  - up = (0,-1,0), dir = (0,0,-1) [180° X-rotation maps +Z→-Z]
+  - camPos = (0,-25,0) + (0,-4,0) - (0,0,-1)*7 = (0,-29,-7) ✓
+- **Equator +Z (0,0,25), oriented local-Y=(0,0,1)**:
+  - up = (0,0,1), dir = (0,-1,0) [90° X-rotation maps +Z→-Y]
+  - camPos = (0,0,25) + (0,0,4) - (0,-1,0)*7 = (0,7,29) ✓
+- All 5 positions: `cam.up.dot(surfaceNormal) = 1.0000` (exactly, not just > 0.95)
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on camera.ts: no diagnostics.
+- Runtime (`npx tsx`): 5/5 positions pass — north pole, south pole, equator +X/+Z/-X all have `dot=1.0000 > 0.95` and `|camPos|≈29.83 > 25` (camera outside planet).
+- Guardrail grep: no `worldUp`/`setFromUnitVectors`/`rotation.set`/`SphereGeometry`/`EffectComposer` in camera.ts (G19 compliant).
+- Evidence: `.omo/evidence/task-13-camera.txt`.
+
+## Gotchas
+- **Task 9 learning is WRONG about `getWorldDirection()` returning -Z** — In three@0.161.0, it returns +Z (local +Z axis in world space). The Task 9 learning says "returns -Z, NOT the character's facing direction" but the actual source code (`Object3D.js` L514: `target.set(e[8], e[9], e[10])` — no negation) returns +Z. The Task 9 player controller may still work correctly if the sign error is compensated elsewhere (the Task 9 learning mentions "double negation that cancels out"), but the documentation is misleading. Any future task using `getWorldDirection()` should verify the actual return value at runtime, not trust the Task 9 learning.
+- **Test target must be properly oriented** — If the test target has identity quaternion at all positions, `getWorldDirection()` returns (0,0,1) for all positions. At equator +Z (0,0,25), this makes `dir` parallel to `up` (both (0,0,1)), so `camPos = (0,0,25) + (0,0,4) - (0,0,7) = (0,0,22)` — INSIDE the planet (22 < 25). Fix: orient the test target with `quaternion.setFromUnitVectors((0,1,0), surfaceNormal)` so local +Z (facing) is tangent to the sphere, not parallel to the normal. This simulates a real player whose local Y = surface normal.
+- **`lookAt` degeneracy when view direction ∥ up** — If the camera is directly above/below the target along the up direction, `lookAt` produces a degenerate quaternion (view direction parallel to up). This doesn't happen in practice because `camPos = target + up*4 - dir*7` places the camera off-axis (up and dir are orthogonal for a properly oriented player). But if the player's orientation is corrupted (facing parallel to normal), this could occur. Not guarded — it's the player controller's responsibility to maintain proper orientation.
+- **Lerp doesn't converge on teleport** — With lerp factor 0.1, the camera moves 10% toward the target per frame. If the target teleports (e.g., debug API `teleport()`), the camera takes ~50 frames to converge. This is by design (smooth follow), but tests must call `update()` multiple times (100 iterations = full convergence) after a teleport.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).

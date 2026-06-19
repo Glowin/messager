@@ -1,0 +1,10 @@
+=== Task 13: Third-Person Camera Verification ===
+5 positions: north/south pole + 3 equator. up.dot(normal) > 0.95 (G19)
+
+north pole   dot=1.0000 PASS | |camPos|=29.83 outside | camPos=(0.00,29.00,-7.00)
+south pole   dot=1.0000 PASS | |camPos|=29.83 outside | camPos=(0.00,-29.00,-7.00)
+equator +X   dot=1.0000 PASS | |camPos|=29.83 outside | camPos=(29.00,-0.00,-7.00)
+equator +Z   dot=1.0000 PASS | |camPos|=29.83 outside | camPos=(0.00,7.00,29.00)
+equator -X   dot=1.0000 PASS | |camPos|=29.83 outside | camPos=(-29.00,0.00,-7.00)
+
+Overall: ALL PASS
