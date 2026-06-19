@@ -1,0 +1,56 @@
+Task 12 — World Content (3 Regions Primitive Layout)
+=====================================================
+
+File: src/regions.ts
+Exports: createRegions() → THREE.Group
+
+VERIFICATION RESULTS
+--------------------
+
+1. npx tsc --noEmit
+   EXIT_CODE=0
+   (strict mode, noUnusedLocals/Parameters clean)
+
+2. npx tsx -e "import {createRegions} from './src/regions'; const g=createRegions(); console.log('objects:', g.children.length)"
+   Output: objects: 21
+   EXIT_CODE=0
+   (21 > 10 ✓)
+
+3. Comprehensive runtime check:
+   total_children: 21
+   on_surface: 21          (all 21 objects snapped to sphere surface, |pos| ≈ planetRadius=25)
+   oriented: 20            (20 of 21 oriented via setFromUnitVectors; 1 at north pole [0,25,0]
+                            where normal=(0,1,0)=UP → identity quaternion is correct)
+   toon_meshes: 41         (all meshes use MeshToonMaterial via createToonMaterial)
+   cliff_house_found: true (userData.landmark='red_cliff_house', userData.questTarget='quest_0')
+
+4. lsp_diagnostics on regions.ts: No diagnostics found
+
+REGION BREAKDOWN (21 direct children)
+-------------------------------------
+Neighborhood (near worker NPC [-18,17,0]): 9 objects
+  - 1 red cliff house (quest_0 target landmark)
+  - 3 houses (BoxGeometry + ConeGeometry roof, warm earth tones)
+  - 3 trees (CylinderGeometry trunk + IcosahedronGeometry canopy)
+  - 2 roads (flat BoxGeometry, crossroad)
+
+Plaza (near kid NPC [0,25,0]): 6 objects
+  - 1 fountain (CylinderGeometry base + water disc + pillar + cap)
+  - 2 benches (BoxGeometry seat + back + legs)
+  - 1 signpost (CylinderGeometry post + BoxGeometry board)
+  - 2 trees
+
+Beach (near dave NPC [25,0,0]): 6 objects
+  - 1 sand disc (CylinderGeometry, yellow)
+  - 1 water surface (CylinderGeometry, blue)
+  - 4 rocks (IcosahedronGeometry, gray)
+
+GUARDRAIL COMPLIANCE
+--------------------
+- G3: No external models — all primitives ✓
+- G19/G20: One-time setFromUnitVectors for static scenery (not runtime) ✓
+- All objects use createToonMaterial(color) ✓
+- All objects snapToSurface(pos, height) + oriented ✓
+- No CSS imports (tsx-compatible) ✓
+- No modifications to main.ts/scene.ts/other task files ✓
+- No TODO comments ✓

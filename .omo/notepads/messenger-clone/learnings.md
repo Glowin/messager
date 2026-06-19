@@ -361,3 +361,32 @@
 - **`QuestState.status` type is `'locked' | 'active' | 'completed'` (3 states, NOT `step_N`)** — The plan text mentions "locked → active → step_0..step_N → completed" but the actual `QuestState` type in types.ts (Task 2) only has 3 status values. Step progression is tracked via `currentStep: number`, not via status string. This is the correct interpretation — `status` is the high-level state, `currentStep` is the fine-grained progress.
 - **`getQuests()` field naming: `id` not `questId`** — The `QuestState` type uses `questId`, but the debug API interface (Task 7) and the spec both use `id`. Must map `questId` → `id` in the return array. Easy to miss if you just spread the `QuestState` object.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Task 12 Learnings — World Content (3 Regions Primitive Layout) (src/regions.ts)
+
+## Files Added
+- `src/regions.ts` — exports `createRegions()` → THREE.Group. ~330 lines. 3 regions (neighborhood/plaza/beach), 21 direct children, 41 toon meshes. No changes to main.ts/scene.ts/other task files.
+
+## Key Decisions
+- **Flat structure (no per-region sub-groups)** — The verification command checks `g.children.length > 10`. If region sub-groups were used, the count would be 3. Instead, all 21 objects are direct children of the root group. Each object is itself a Group or Mesh, positioned and oriented independently. This also makes raycasting/traversal simpler for Task 14.
+- **Tangent-plane offset placement** — To place multiple objects around a region center on the sphere, compute two orthogonal tangent vectors via `tangentBasis(normal)` (cross product with a reference axis), then offset: `pos = center + t1*a + t2*b`, then `snapToSurface(pos, height)`. This correctly distributes objects in the local tangent plane without distortion. The reference axis is `(0,1,0)` unless `|normal.y| > 0.9` (near poles), where `(1,0,0)` is used to avoid degenerate cross products.
+- **One-time `setFromUnitVectors` for static scenery is G19/G20 compliant** — Same as Task 10 (NPCs): the guardrails prohibit RUNTIME absolute orientation reconstruction (causes south-pole lockup during movement). Static scenery is oriented ONCE at creation. None of the 3 region centers are at the exact south pole. The plaza center [0,25,0] is at the north pole where normal=(0,1,0)=UP, so `setFromUnitVectors((0,1,0),(0,1,0))` produces identity quaternion — correct, no rotation needed.
+- **`placeNear` + `placeObject` helper pattern** — `placeNear(center, t1, t2, a, b, height)` computes a snapped surface position at a tangent offset. `placeObject(obj, pos)` copies the position and sets the quaternion. This separates position computation from object placement, making the region builders readable. Both use `.clone()` to avoid mutating shared vectors.
+- **Red cliff house = cliff pedestal (Icosahedron) + red house (Box+Cone) on top** — The cliff is an `IcosahedronGeometry(1.8,0)` scaled (1.4, 1.2, 1.4) at y=0.8, partially embedded in the ground (bottom at y≈-1.36). The red house sits at y=2.2 (on top of the cliff). Total height ~4.3 units on radius-25 planet (~17% of radius) — prominent and identifiable. Tagged with `userData.landmark='red_cliff_house'` and `userData.questTarget='quest_0'` for Task 14 to find via traversal.
+- **Cone roof with 4 radial segments + `rotation.y = π/4`** — `ConeGeometry(radius, height, 4)` produces a pyramid. Default orientation has a flat face toward +Z. Rotating π/4 around Y aligns the pyramid's edges with the box's edges, so the roof sits squarely on the house body. Without this rotation, the roof would look twisted 45° relative to the walls.
+- **No CSS imports (tsx compatibility)** — regions.ts has a mandatory `npx tsx -e` verification command. CSS imports would break tsx (same as Task 8/11 gotcha). regions.ts is pure TypeScript with no side-effect imports.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on regions.ts: no diagnostics.
+- Runtime (`npx tsx -e`): `objects: 21` (>10 ✓).
+- Comprehensive check: 21/21 on surface (|pos|≈25), 20/21 oriented (1 at north pole with identity quaternion = correct), 41 toon meshes, cliff house found with questTarget='quest_0'.
+- Evidence: `.omo/evidence/task-12-regions.txt`.
+
+## Gotchas
+- **North pole identity quaternion is correct, not a bug** — The plaza fountain at [0,25,0] has surface normal (0,1,0) = UP. `setFromUnitVectors((0,1,0),(0,1,0))` produces identity quaternion (0,0,0,1). The comprehensive check initially flagged this as "not oriented" (20/21), but it IS correctly oriented — no rotation is needed when the normal already equals UP. Do not add special-case rotation for this.
+- **`addScaledVector` doesn't mutate the tangent vectors** — `pos.addScaledVector(t1, a)` modifies `pos`, not `t1`. This means `t1` and `t2` can be safely reused across multiple `placeNear` calls within the same region. Important for the loop-based placement of trees and rocks.
+- **`IcosahedronGeometry` for rocks AND tree canopies** — Both use `IcosahedronGeometry(size, 0)` (detail=0, 20 faces). For rocks this gives a jagged natural look. For tree canopies, the low-poly faceted sphere pairs well with flat-shaded toon material. Different colors (gray vs green) make them visually distinct despite the same geometry type.
+- **`CylinderGeometry` for water/sand discs** — Using `CylinderGeometry(radius, radius, height, 16)` (same top/bottom radius) produces a flat disc. The 16 radial segments give a smooth-enough circle for low-poly aesthetic. Height 0.1-0.15 keeps them thin (flat on the surface). `position.y = height/2` puts the bottom at the surface.
+- **Object internal y-offsets become normal-aligned after orientation** — When `placeObject` sets `quaternion.setFromUnitVectors(UP, normal)`, the object's local +Y axis aligns with the surface normal. All internal mesh y-offsets (e.g., house body at y=h/2, roof at y=h+h*0.3) then extend along the normal (away from sphere center). This is the correct behavior — objects "stand up" on the sphere surface.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).

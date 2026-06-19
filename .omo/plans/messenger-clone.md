@@ -848,7 +848,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 3）— `feat(quest): step state machine + NEXT UP overlay + 5 quests`
 
-- [ ] 12. 世界内容（3 区域原语布局）
+- [x] 12. 世界内容（3 区域原语布局）
 
   **What to do**:
   - 创建 `src/regions.ts`：
