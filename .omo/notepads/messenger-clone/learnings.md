@@ -196,3 +196,33 @@
 - **`IcosahedronGeometry(0.5)` defaults to detail=0** (20 faces) — perfect for low-poly look. No need to pass the second arg.
 - **`createToonMaterial` creates a new gradient map each call** — for 12 meshes this means 7 gradient textures (one per shared material). Could be optimized by sharing a single gradient map, but that would require changing cel-material.ts (Task 3's file). 7 textures is negligible overhead; not worth the cross-task coupling.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved, Task 1/3 files untouched per task constraint).
+
+# Task 7 Learnings — Debug API (window.__game, src/debug-api.ts)
+
+## Files Added
+- `src/vite-env.d.ts` — `/// <reference types="vite/client" />` (1 line). Required for `import.meta.env.DEV` to type-check under tsc. Task 1 scaffold missed this; no existing code used `import.meta.env` so it wasn't caught.
+- `src/debug-api.ts` — exports `GameState` interface, `DebugApi` interface, `tickFps()`, `installDebugApi(getState)`, `declare global { interface Window { __game?: DebugApi } }`. ~105 lines.
+
+## Key Decisions
+- **`import.meta.env.DEV` is Vite's static boolean** — `true` in dev, `false` in prod. Vite replaces it at transform time (before Rollup). In PROD: `if (!import.meta.env.DEV) return;` → `if (!false) return;` → `if (true) return;` → unconditional return → `window.__game = {...}` is unreachable → Rollup dead-code-eliminates it. This is the documented Vite pattern for DEV-only code.
+- **Entire module tree-shaken in PROD** — since no module imports `debug-api.ts` yet (Wave 4 integration), Rollup removes the entire module. Verified: `grep -c 'installDebugApi\|tickFps\|frameCount' dist/assets/*.js` → 0 matches. Even when Wave 4 imports it, only the `tickFps` function (no `__game` string) would survive in PROD; the `installDebugApi` body's `window.__game = {...}` is dead code after the DEV guard.
+- **`isReady` and `fps` implemented as getters** — they need to reflect live state, so `get isReady()` checks current `getState()` and `get fps()` reads the module-level `currentFps`. TypeScript allows getters to satisfy interface property declarations (`isReady: boolean`).
+- **`tickFps()` exported separately** — the debug API doesn't own the render loop, so FPS frame counting must be called from the render loop (main.ts, Wave 4). `tickFps()` increments `frameCount` and recomputes `currentFps` every ~500ms via `performance.now()`. Cheap between updates (just an increment + time check).
+- **`GameState` all fields optional** — game may not be fully initialized when `installDebugApi` is called. Getters use `?? null` / `?? []` for missing fields — never throw. Action methods (`teleport`/`completeQuest`/`pause`/`resume`) use optional chaining `?.()` — no-op if underlying function is undefined.
+- **Tuples `[number, number, number]` not `THREE.Vector3`** — the task spec explicitly uses tuples for the debug API return types. This decouples the debug API from THREE types (no THREE import needed in debug-api.ts) and makes Playwright `page.evaluate` assertions simpler (JSON-serializable).
+- **`completeQuest` has "仅 QA 用" comment** — per spec, marks it as bypassing quest validation for test scenarios only.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on debug-api.ts: no diagnostics.
+- `npm run build`: exit 0, dist/assets/index-*.js ~457 KB (same as before — debug-api module tree-shaken, zero size impact).
+- `grep -rl '__game' dist/`: exit 1 (no matches — correct, PROD does not expose `window.__game`).
+- `grep -c 'installDebugApi\|tickFps\|frameCount\|lastFpsTime\|currentFps' dist/assets/*.js`: 0 (entire module tree-shaken).
+- Evidence: `.omo/evidence/task-7-debug.txt`.
+
+## Gotchas
+- **Missing `vite-env.d.ts`** — Task 1 scaffold didn't create this file. Without `/// <reference types="vite/client" />`, `import.meta.env.DEV` is a TS error (`Property 'env' does not exist on 'ImportMeta'`). Created it as part of this task. This is a Vite project standard file — safe to add, doesn't modify any existing task file.
+- **`declare global` is type-only** — under `isolatedModules: true`, the `declare global { interface Window { __game?: DebugApi } }` block is erased at emit. It produces zero runtime code, so it cannot leak `__game` into PROD. It only augments the TypeScript `Window` type for DEV-time type safety.
+- **Object literal getters satisfy interface properties** — `const obj = { get foo() { return 42; } }` satisfies `interface I { foo: number }`. This is standard TypeScript behavior but worth noting: the interface declares `isReady: boolean` (not `readonly`), and the getter implementation is inherently read-only. Callers cannot assign to `window.__game.isReady = true` (it's a getter), but the interface doesn't require assignability.
+- **PROD elimination has two layers**: (1) `import.meta.env.DEV` → `false` makes the `window.__game = {...}` assignment dead code within `installDebugApi`; (2) since no module imports `debug-api.ts` yet, Rollup tree-shakes the entire module. Both layers ensure `__game` never appears in dist. When Wave 4 imports `installDebugApi` and `tickFps`, layer 1 still protects: `installDebugApi`'s body is dead code, and `tickFps` contains no `__game` string.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).

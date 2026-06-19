@@ -558,7 +558,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 2）— `feat(character): low-poly humanoid + idle/walk/talk anim`
 
-- [ ] 7. 调试 API（window.__game）
+- [x] 7. 调试 API（window.__game）
 
   **What to do**:
   - 创建 `src/debug-api.ts`：

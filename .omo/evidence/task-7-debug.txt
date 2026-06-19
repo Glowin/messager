@@ -1,0 +1,61 @@
+Task 7 — Debug API (window.__game) Verification
+================================================
+
+Files created:
+  - src/vite-env.d.ts  (/// <reference types="vite/client" /> — enables import.meta.env typing)
+  - src/debug-api.ts   (~105 lines: GameState + DebugApi interfaces, tickFps(), installDebugApi(), declare global Window.__game)
+
+--- 1. npx tsc --noEmit ---
+
+$ npx tsc --noEmit
+EXIT: 0
+(strict mode, noUnusedLocals, noUnusedParameters — all clean)
+
+lsp_diagnostics on src/debug-api.ts: No diagnostics found.
+
+--- 2. npm run build ---
+
+$ npm run build
+> tsc && vite build
+vite v5.4.21 building for production...
+✓ 6 modules transformed.
+dist/index.html                  0.68 kB │ gzip:   0.37 kB
+dist/assets/index-BAyS20_u.js  456.72 kB │ gzip: 115.79 kB
+✓ built in 403ms
+EXIT: 0
+
+--- 3. grep __game dist/ (PROD elimination check) ---
+
+$ grep -rl '__game' dist/
+GREP EXIT: 1   (no matches — correct: __game NOT in PROD bundle)
+
+--- 4. Full module tree-shaking verification ---
+
+$ grep -c 'installDebugApi\|tickFps\|frameCount\|lastFpsTime\|currentFps' dist/assets/*.js
+0
+GREP EXIT: 1   (no matches — entire debug-api module tree-shaken: nobody imports it yet)
+
+--- Design Notes ---
+
+- import.meta.env.DEV is Vite's static boolean: true in dev, false in prod.
+  In PROD, `if (!import.meta.env.DEV) return;` becomes `if (!false) return;`
+  → unconditional return → `window.__game = {...}` is dead code → Rollup eliminates it.
+- Since no module imports debug-api.ts yet (Wave 4 integration), the ENTIRE
+  module is tree-shaken in PROD — zero trace in dist/.
+- declare global { interface Window { __game?: DebugApi } } is type-only,
+  erased at emit (isolatedModules: true).
+- GameState interface: all fields optional (game may not be fully initialized
+  when debug API is first installed). Getters return null/[] for missing
+  fields — never throw.
+- FPS: tickFps() counts frames via performance.now(), recomputes every ~500ms.
+  Exported separately so the render loop (main.ts, Wave 4) calls it each frame.
+- completeQuest has "仅 QA 用" comment — bypasses quest validation for test scenarios.
+- Did NOT touch main.ts/scene.ts/other task files (G17 preserveDrawingBuffer
+  lock preserved; integration deferred to Wave 4).
+
+--- Acceptance Criteria ---
+
+[x] src/debug-api.ts exports installDebugApi(stateGetter) + DebugApi interface + window.__game global type declaration
+[x] Only import.meta.env.DEV mounts; PROD does not mount
+[x] npx tsc --noEmit exit 0
+[x] npm run build product grep __game — no match
