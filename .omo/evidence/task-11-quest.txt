@@ -1,0 +1,59 @@
+=== Task 11: Quest System (src/quest.ts) — Verification Evidence ===
+
+## 1. TypeScript Type Check
+Command: npx tsc --noEmit
+Result: EXIT 0 (strict mode, noUnusedLocals/Parameters clean)
+
+## 2. Spec Verification Command
+Command: npx tsx -e "import {QuestManager} from './src/quest'; const qm=new QuestManager(); qm.startQuest('quest_0'); console.log(qm.getQuests().filter(q=>q.status==='active').length, qm.isComplete('quest_0'))"
+Output: 1 false
+Result: EXIT 0
+Interpretation: 1 active quest after startQuest('quest_0'), isComplete('quest_0')=false ✓
+
+## 3. Comprehensive State Machine Test
+Command: npx tsx -e (full state machine flow)
+Output:
+  initial locked: 5
+  after start active: 1
+  quest_0 currentStep: 0
+  after advance1 status: active
+  after advance1 step: 1
+  after advance2 status: completed
+  isComplete quest_0: true
+  after advance-on-completed status: completed
+  quest_1 after start: active
+  quest_2 after complete-on-locked: locked
+  total quests: 5
+Result: EXIT 0
+
+State machine transitions verified:
+  - locked → active (startQuest) ✓
+  - active step advance (advanceStep, currentStep++) ✓
+  - active → completed (advanceStep past last step) ✓
+  - advanceStep on completed = no-op ✓
+  - startQuest on locked = active ✓
+  - completeQuest on locked = no-op ✓
+  - getQuests() returns 5 quests ✓
+
+## 4. LSP Diagnostics
+Result: No diagnostics found (src/quest.ts)
+
+## 5. API Surface Verified
+QuestManager class exports:
+  - startQuest(id): locked→active, shows first step objective ✓
+  - advanceStep(id): currentStep++, completes if past last step ✓
+  - completeQuest(id): active→completed, shows completion + plays SFX ✓
+  - isComplete(id): returns boolean ✓
+  - getQuests(): returns Array<{id, status, currentStep}> (5 quests) ✓
+  - showObjective(text): "NEXT UP" overlay (DOM, centered, auto-fade) ✓
+  - showCompletion(text): completion overlay (DOM, centered, auto-fade) ✓
+
+Also exports: questManager singleton instance
+
+## 6. Design Decisions
+- Styles injected via JS (createElement('style')) — NOT CSS import, because tsx cannot parse CSS imports (Task 8 gotcha). Self-contained module, tsx-compatible.
+- typeof document !== 'undefined' guard on showOverlay — Node (tsx) skips DOM, state machine still works.
+- completeQuest is public — debug API (Task 7) expects completeQuest(id) for QA shortcut.
+- startQuest only works on locked quests (no-op on active/completed) — prevents accidental resets.
+- advanceStep only works on active quests — no-op on locked/completed.
+- AudioManager.playSfx('quest-complete') called in completeQuest — no-throw in Node (Task 4 verified).

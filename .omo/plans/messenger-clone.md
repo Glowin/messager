@@ -791,7 +791,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 3）— `feat(npc): 5 static npcs + triangle marker + name tag`
 
-- [ ] 11. 任务系统（步骤状态机）
+- [x] 11. 任务系统（步骤状态机）
 
   **What to do**:
   - 创建 `src/quest.ts`：
