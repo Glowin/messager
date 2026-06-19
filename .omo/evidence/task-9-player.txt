@@ -2,6 +2,23 @@
 initial: [ '0.0000', '25.0000', '0.0000' ]
 after: [ '0.0000', '1.7684', '-24.9374' ]
 moved: true
+
+=== Task 9 Fix: Forward Direction Bug ===
+Date: 2026-06-19
+Root cause: In three@0.161.0, getWorldDirection() returns local +Z axis
+  (source: target.set(e[8], e[9], e[10]) — NO negation).
+  Character faces +Z (Task 6), so getWorldDirection() returns the FACING
+  direction, not -Z. The old code used a negative sign on the angle
+  (`-FORWARD_SPEED * speedMul * moveDir * dt`) based on the wrong
+  assumption that getWorldDirection returns -Z. This made W move backward.
+Fix: Removed the negative sign at src/player.ts line ~137:
+  - const angle = -FORWARD_SPEED * speedMul * moveDir * dt;
+  + const angle = FORWARD_SPEED * speedMul * moveDir * dt;
+Math verification (north pole, identity orientation):
+  axis = cross(up=(0,1,0), forward=(0,0,1)) = (1,0,0) = +X
+  W (moveDir=+1): angle=+0.3, pos (0,5,0)->(0,4.78,+1.48) -> +Z (forward) OK
+  S (moveDir=-1): angle=-0.3, pos (0,5,0)->(0,4.78,-1.48) -> -Z (backward) OK
+tsc --noEmit: exit 0
 surfaceDist: 0.000000 (< 0.1 required)
 upNaN: false posNaN: false
 up: [ '0.0000', '0.1205', '-0.9927' ]

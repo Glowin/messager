@@ -134,7 +134,7 @@ export function createPlayer(_world?: unknown): Player {
         _axis.crossVectors(_up, _forward);
         if (_axis.lengthSq() > 1e-10) {
           _axis.normalize();
-          const angle = -FORWARD_SPEED * speedMul * moveDir * dt;
+          const angle = FORWARD_SPEED * speedMul * moveDir * dt;
           _q.setFromAxisAngle(_axis, angle);
           group.position.applyQuaternion(_q);
           group.quaternion.premultiply(_q);
