@@ -961,7 +961,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 3）— `feat(camera): third-person follow + surface-normal up + auto-center`
 
-- [ ] 14. 交互系统（E 键 → 对话 → 任务 → 配送完成）
+- [x] 14. 交互系统（E 键 → 对话 → 任务 → 配送完成）
 
   **What to do**:
   - 创建 `src/interaction.ts`：
