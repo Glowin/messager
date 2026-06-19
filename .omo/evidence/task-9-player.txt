@@ -1,0 +1,42 @@
+=== Forward Movement Test ===
+initial: [ '0.0000', '25.0000', '0.0000' ]
+after: [ '0.0000', '1.7684', '-24.9374' ]
+moved: true
+surfaceDist: 0.000000 (< 0.1 required)
+upNaN: false posNaN: false
+up: [ '0.0000', '0.1205', '-0.9927' ]
+
+=== Turn Test ===
+dirBefore: [ '0.0000', '0.9975', '0.0707' ]
+dirAfter: [ '-0.8415', '0.5389', '0.0382' ]
+turnChanged: true
+
+=== Jump Test ===
+jumpHeight: 25.0973 (planetRadius: 25 )
+landHeight: 25.0000
+landSurfaceDist: 0.000000 (< 0.1 required)
+
+=== South Pole Test ===
+southInitial: [ '0.0000', '-25.0000', '0.0000' ]
+southAfter: [ '0.0000', '-1.7684', '24.9374' ]
+southMoved (no lockup): true
+southNaN: false southUpNaN: false
+
+=== North Pole Test ===
+northMoved: true northNaN: false northUpNaN: false
+
+=== setEnabled(false) Test ===
+disabledMoved (should be false): false
+
+=== SUMMARY ===
+forward_moved: true
+on_surface: true
+up_not_nan: true
+turn_changed: true
+jump_works: true
+land_on_surface: true
+south_no_lockup: true
+south_no_nan: true
+north_no_lockup: true
+north_no_nan: true
+disable_works: true

@@ -668,7 +668,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 2）— `feat(ui): dialogue overlay with advance`
 
-- [ ] 9. 玩家控制器（球面移动 / 跳跃 / 冲刺）（CRITICAL PATH）
+- [x] 9. 玩家控制器（球面移动 / 跳跃 / 冲刺）（CRITICAL PATH）
 
   **What to do**:
   - 创建 `src/player.ts`：

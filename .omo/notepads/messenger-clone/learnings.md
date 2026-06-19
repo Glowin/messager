@@ -259,3 +259,45 @@
 - **`setInterval` returns `number` in browser, `NodeJS.Timeout` in Node** — under `lib: ["DOM"]`, `window.setInterval` returns `number`. Using `window.setInterval` (not bare `setInterval`) ensures the return type is `number`, matching the `typewriterId: number | null` field. Bare `setInterval` might resolve to Node's `Timer` type in some TS configurations.
 - **CSS `@import` must be the first statement in CSS** — the Google Fonts `@import url(...)` must appear before any other CSS rules (except `@charset`). Placing it after `:root {}` would be silently ignored by the browser. Vite's CSS processing also requires this ordering.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Task 9 Learnings — Player Controller (Spherical Movement / Jump / Sprint) (src/player.ts)
+
+## Files Added
+- `src/player.ts` — exports `createPlayer(_world?)`, `Player` interface, `InputState` interface. ~165 lines. No changes to main.ts/scene.ts/other task files.
+
+## Key Decisions
+- **Spherical forward movement = rotate BOTH position AND orientation around sphere center**: `rotateOnAxis`/`rotateOnWorldAxis` only modify the quaternion (orientation), NOT the position. To move along the sphere, you must also rotate the position around the origin (sphere center) using `position.applyQuaternion(q)`. The task spec's `rotateOnAxis(axis, angle)` only handles orientation; the position rotation is implied by "球心为隐含 pivot" (sphere center is implicit pivot). Implementation: `const q = new Quaternion().setFromAxisAngle(axis, angle); group.position.applyQuaternion(q); group.quaternion.premultiply(q);` — `premultiply` (world-space) not `multiply` (local-space), because the position rotation is in world space.
+- **`getWorldDirection()` returns -Z, NOT the character's facing direction**: Task 6 character faces +Z, but Three.js `Object3D.getWorldDirection()` returns the local -Z axis in world space (camera convention). The task's formula `axis = crossVectors(up, forward)` with `forward = getWorldDirection()` and `angle = -speed*dt` has a double negation that cancels out: `cross(up, -Z) = -X`, `rotateOnAxis(-X, -speed) = rotateOnAxis(+X, +speed)`, which correctly moves the character in its +Z facing direction. Do NOT negate `getWorldDirection()` — the task's formula works as-is.
+- **Turning uses `rotateOnAxis(LOCAL_UP, angle)` not `rotateOnAxis(player.up, angle)`**: `rotateOnAxis` expects a LOCAL-space axis (post-multiply), but `player.up` is a WORLD-space vector. When the player is properly oriented (local Y = surface normal), `rotateOnAxis(new Vector3(0,1,0), angle)` = `rotateOnWorldAxis(surfaceNormal, angle)`. Using `LOCAL_UP = (0,1,0)` is the correct local-space equivalent. The task spec's `player.rotateOnAxis(player.up, ...)` is imprecise — it should be either `rotateOnAxis(LOCAL_Y, ...)` or `rotateOnWorldAxis(player.up, ...)`.
+- **Initial position at north pole with identity orientation**: At (0, R, 0), surface normal = (0,1,0) = local Y with identity orientation. No special orientation setup needed. All subsequent movement is via incremental rotations. For other starting positions, a one-time `setFromAxisAngle` (NOT `setFromUnitVectors`) is safe — G19/G20 prohibit RUNTIME absolute reconstruction, not one-time initial setup.
+- **Jump = `velocity.copy(up * JUMP_FORCE)` + `applyGravity` each frame**: The jump sets a purely radial outward velocity. `applyGravity` (Task 5) handles the gravity deceleration, apex, fall, and landing (snap + zero radial velocity). The player's `isGrounded` flag is set when `|pos| <= planetRadius + 0.01`. Movement is only allowed when grounded (no air control) — simpler for MVP.
+- **`jumpRequested` flag prevents auto-repeat jumps**: `keydown` fires repeatedly when a key is held (auto-repeat). Using `e.repeat` guard: `if (action === 'jump' && !e.repeat) jumpRequested = true;` ensures jump only triggers on the initial press, not on auto-repeat. The flag is consumed (set to false) in `update()` each frame.
+- **NaN prevention: check `axis.lengthSq() > 1e-10` before normalize**: If `up` and `forward` are parallel (e.g., player orientation corrupted), `cross(up, forward)` = zero vector, and `normalize()` produces NaN. Guard: `if (_axis.lengthSq() > 1e-10) { _axis.normalize(); /* movement */ }` — skips movement for that frame instead of producing NaN.
+- **`position` and `up` are direct references, not getters**: `return { position: group.position, up: group.up, ... }` — since `group.position` and `group.up` are Vector3 objects mutated in place (never replaced), `player.position` and `group.position` are the same object. Changes are reflected automatically. Getters would also work but are unnecessary.
+- **`typeof window !== 'undefined'` guard for event listeners**: In Node (tsx verification), `window` doesn't exist. The guard prevents `ReferenceError` and allows the player to be created and updated in Node for testing. For tsx verification, a fake `window` object with `addEventListener` is set up before calling `createPlayer`.
+- **`_world` parameter accepted but unused**: The task spec says `createPlayer(world)` but we import directly from `./world`. The parameter is prefixed with `_` to satisfy `noUnusedParameters`. Making it optional (`_world?: unknown`) allows `createPlayer()` for testing.
+
+## Movement Math (verified)
+- **Forward at north pole (0,25,0), identity orientation, W pressed 30 frames (0.5s)**:
+  - up = (0,1,0), getWorldDirection = (0,0,-1)
+  - axis = cross(up, forward) = cross((0,1,0),(0,0,-1)) = (-1,0,0)
+  - angle = -3.0 * 1.0 * 1 * dt = -3.0*dt per frame
+  - After 30 frames: position (0, 1.77, -24.94) — moved toward +Z (character facing direction), |pos| = 25.0000 (on surface) ✓
+- **South pole (0,-25,0), orientation = setFromAxisAngle((1,0,0), π), W pressed 30 frames**:
+  - Player moved to (0, -1.77, 24.94), no NaN, no lockup ✓
+- **Jump**: Space → velocity = (0, 6, 0), 1 frame later height = 25.097 (rising), 90 frames later height = 25.0000 (landed) ✓
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `lsp_diagnostics` on player.ts: no diagnostics.
+- Runtime (`npx tsx`): all 11 checks pass — forward_moved, on_surface, up_not_nan, turn_changed, jump_works, land_on_surface, south_no_lockup, south_no_nan, north_no_lockup, north_no_nan, disable_works.
+- Guardrail grep: no `setFromUnitVectors` / `rotation.set` in player.ts (G19/G20 compliant).
+- Evidence: `.omo/evidence/task-9-player.txt`.
+
+## Gotchas
+- **`npx tsx -e` doesn't support top-level await**: tsx uses CJS format for `-e` inline scripts, which doesn't support `await import()`. **Fix**: write a temporary `.ts` file in the project root and run `npx tsx file.ts`. The file must be in the project root (not /tmp) so `three` can be resolved from `node_modules`.
+- **`rotateOnAxis` vs `rotateOnWorldAxis`**: `rotateOnAxis(axis, angle)` post-multiplies (`quaternion.multiply(q)`) — axis is in LOCAL space. `rotateOnWorldAxis(axis, angle)` pre-multiplies (`quaternion.premultiply(q)`) — axis is in WORLD space. For turning (yaw around surface normal), use `rotateOnAxis(LOCAL_UP=(0,1,0), angle)` since local Y = surface normal when properly oriented. For forward movement, use `quaternion.premultiply(q)` directly (world-space) to match the position rotation.
+- **`applyGravity` called every frame even when grounded**: When grounded with zero velocity, `applyGravity` applies a tiny inward velocity (-GRAVITY*dt), integrates position (moves slightly inward), then snaps back to surface and zeros radial velocity. This is correct — the player stays on the surface. The `isGrounded` flag is set separately by checking `|pos| <= planetRadius + 0.01`.
+- **`snapToSurface` safety after grounded movement**: Even though `position.applyQuaternion(q)` preserves the position length (rotation around origin), floating-point precision can cause tiny drift. Adding `if (isGrounded) snapToSurface(group.position, 0)` after movement ensures the player is always exactly on the surface.
+- **`e.preventDefault()` on all mapped keys**: Space (page scroll), arrow keys (page scroll) must have default prevented. Calling `e.preventDefault()` for all mapped keys (WASD, arrows, Space, Shift) is safe and prevents unwanted browser behavior.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
