@@ -1,0 +1,44 @@
+Task 8 — Dialogue UI Overlay
+================================
+
+Files Created:
+- src/ui/dialogue.ts  (~115 lines) — exports showDialogue(lines, onComplete) + hideDialogue()
+- src/ui/dialogue.css  (~110 lines) — white rounded box + blue name tag (left) + blue ▶ advance button (bottom-right)
+
+Verification Results:
+1. npx tsc --noEmit → exit 0 (strict, noUnusedLocals/Parameters clean)
+2. npm run build → exit 0 (Vite handles CSS import; module tree-shaken since no integrator imports it yet — same pattern as Task 7 debug-api)
+3. LSP diagnostics on dialogue.ts → no diagnostics
+4. Export check (esbuild --loader:.css=empty + node require):
+   exports ok: function function
+   (showDialogue and hideDialogue both exported as functions)
+
+Design:
+- Pure DOM (no React/Vue). Overlay appended to #app (fallback: document.body).
+- position: fixed overlay with pointer-events: none; box has pointer-events: auto (canvas remains interactive).
+- Name tag: blue (#2563eb) bg, white text, uppercase, top-left overlapping box edge (top: -16px).
+- Dialogue box: white bg, 14px radius, soft shadow, max-width 640px, bottom-centered.
+- Text: lowercase (text-transform: lowercase), 18px Nunito, line-height 1.6.
+- ▶ button: blue circle 38px, bottom-right, pulse animation, hover scale 1.08, active scale 0.94.
+- Entrance: slide-up + fade-in (300ms cubic-bezier).
+- Typewriter: 18ms/char with blinking ▋ cursor; advancing during typing reveals full line instantly.
+- Font: Nunito (Google Fonts import) — rounded, friendly, not in the avoid list.
+
+Advance Triggers:
+- Space / KeyE / Enter (window keydown, preventDefault to stop page scroll)
+- ▶ button click (blur after click to prevent Space/Enter double-fire from button focus)
+
+State Management:
+- Single module-level `state: DialogueState | null` object — clean lifecycle, no stale variables.
+- showDialogue: if already showing, hide first; if empty lines, call onComplete immediately.
+- hideDialogue: removes keydown listener, clears typewriter interval, removes overlay DOM, nulls state.
+- advance: if typing → skip typewriter; else next line or (if last) call onComplete + hideDialogue.
+
+CSS Tokens (on :root, reusable by future UI tasks):
+- --ui-blue, --ui-blue-dark, --ui-text, --ui-bg, --ui-font, --ui-radius, --ui-shadow
+
+Note on tsx verification:
+- `npx tsx -e "import {...} from './src/ui/dialogue'"` FAILS because Node.js/tsx cannot parse CSS imports.
+- CSS imports are a Vite feature (processed by Vite's build pipeline, not Node.js).
+- Workaround: used `npx esbuild --loader:.css=empty` to stub CSS and verify exports.
+- Real-world verification: `npm run build` exit 0 (Vite correctly processes the CSS import).

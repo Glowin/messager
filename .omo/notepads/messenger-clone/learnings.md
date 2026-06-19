@@ -226,3 +226,36 @@
 - **Object literal getters satisfy interface properties** — `const obj = { get foo() { return 42; } }` satisfies `interface I { foo: number }`. This is standard TypeScript behavior but worth noting: the interface declares `isReady: boolean` (not `readonly`), and the getter implementation is inherently read-only. Callers cannot assign to `window.__game.isReady = true` (it's a getter), but the interface doesn't require assignability.
 - **PROD elimination has two layers**: (1) `import.meta.env.DEV` → `false` makes the `window.__game = {...}` assignment dead code within `installDebugApi`; (2) since no module imports `debug-api.ts` yet, Rollup tree-shakes the entire module. Both layers ensure `__game` never appears in dist. When Wave 4 imports `installDebugApi` and `tickFps`, layer 1 still protects: `installDebugApi`'s body is dead code, and `tickFps` contains no `__game` string.
 - **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).
+
+# Task 8 Learnings — Dialogue UI Overlay (src/ui/dialogue.ts + src/ui/dialogue.css)
+
+## Files Added
+- `src/ui/dialogue.ts` — exports `showDialogue(lines, onComplete)` + `hideDialogue()`. ~115 lines. Pure DOM, no React/Vue.
+- `src/ui/dialogue.css` — white rounded box + blue name tag (left) + blue ▶ advance button (bottom-right). ~110 lines. First CSS file in project.
+
+## Key Decisions
+- **Single module-level `state: DialogueState | null` object** — instead of many individual `let` variables (which risk stale values and `noUnusedLocals` issues), all dialogue state lives in one object. `null` = no dialogue active. Clean lifecycle: `showDialogue` creates, `hideDialogue` nulls. This pattern avoids the "stale variable" problem where module-level vars retain values from a previous dialogue after `hideDialogue`.
+- **CSS imported via `import './dialogue.css'` in dialogue.ts** — standard Vite pattern. Vite's build pipeline processes the CSS import (extracts to bundle). TypeScript accepts it via `vite/client` type declarations (already present from Task 7's `vite-env.d.ts`). The CSS module is tree-shaken in production until an integrator (Task 14/15) imports `showDialogue`.
+- **`position: fixed` on overlay (not `absolute`)** — `#app` has no `position: relative` set (it's `static` in index.html). Using `fixed` ensures the overlay covers the viewport regardless of `#app`'s position context. The overlay is still appended to `#app` per spec, but `fixed` decouples positioning from the parent's layout.
+- **`pointer-events: none` on overlay, `auto` on box** — the game canvas remains mouse-interactive during dialogue (render loop continues, per spec "不阻塞渲染循环"). Only the dialogue box itself captures mouse events. Task 14 will gate keyboard input separately.
+- **Typewriter with skip-on-advance** — 18ms/char (≈55 chars/sec, readable pace). If the user presses Space/E/Enter or clicks ▶ while typing, the full line is revealed instantly (no advance to next line). Second advance proceeds to next line. This is the standard VN/dialogue UX.
+- **Button `blur()` after click** — prevents Space/Enter from double-firing (button keydown activation + window keydown listener). After `blur()`, the button loses focus, so subsequent Space/Enter only triggers the window listener.
+- **`e.preventDefault()` on Space keydown** — prevents page scroll (Space's default action when no focusable element is active).
+- **CSS design tokens on `:root`** — `--ui-blue`, `--ui-blue-dark`, `--ui-text`, `--ui-bg`, `--ui-font`, `--ui-radius`, `--ui-shadow`. Established as the foundation for future UI tasks (Task 15 title screen, Task 16 HUD) to reuse. Nunito font (Google Fonts) — rounded, friendly, NOT in the avoid list (Arial/Inter/Roboto/Space Grotesk).
+- **`text-transform: lowercase` on dialogue text** — CSS safety net ensures NPC dialogue is always lowercase per original game convention, even if data has mixed case. Name tag uses `text-transform: uppercase` for speaker names.
+- **`Pick<DialogueState, 'overlay' | 'nameTag' | 'text'>` as `buildDom()` return type** — `buildDom()` creates the DOM tree (including the advance button + its event listener) but only returns the 3 elements that `showDialogue` needs to store in `state`. The advance button doesn't need to be in `state` because its click listener calls `advance()` which accesses `state` directly. `Pick` avoids declaring a separate return type interface.
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0 (strict, noUnusedLocals/Parameters clean).
+- `npm run build`: exit 0 (Vite processes CSS import; module tree-shaken since no integrator imports it yet — same as Task 7).
+- `lsp_diagnostics` on dialogue.ts: no diagnostics.
+- Export check: `npx esbuild src/ui/dialogue.ts --bundle --loader:.css=empty --format=cjs` → `node -e "require(...)"` → `exports ok: function function`.
+- Evidence: `.omo/evidence/task-8-dialogue.txt`.
+
+## Gotchas
+- **`npx tsx -e "import {...} from './src/ui/dialogue'"` FAILS** — Node.js/tsx cannot parse CSS imports (`@import url(...)` in the CSS file is treated as JS syntax error). CSS imports are a Vite feature processed by Vite's build pipeline, not Node.js. **Workaround**: use `npx esbuild --loader:.css=empty` to stub CSS imports, then `node -e` to check exports. The real-world verification is `npm run build` (Vite handles CSS correctly). Do NOT remove the CSS import from dialogue.ts to make tsx work — `import './dialogue.css'` is the standard Vite pattern.
+- **`noUnusedLocals` with destructured returns** — if `buildDom()` returns `{ overlay, nameTag, text, advanceBtn }` but the caller only destructures `{ overlay, nameTag, text }`, the unused `advanceBtn` local triggers TS6133. Fix: don't return `advanceBtn` from `buildDom()` (the button's event listener is attached inside `buildDom`, so the caller doesn't need a reference to it).
+- **Button focus causes Space/Enter double-fire** — after clicking the ▶ button, it retains focus. Subsequent Space/Enter keydown triggers BOTH the window keydown listener AND the button's default activation (click event). Fix: `advanceBtn.blur()` in the click handler. This is a common gotcha for any UI with both keyboard and mouse advance.
+- **`setInterval` returns `number` in browser, `NodeJS.Timeout` in Node** — under `lib: ["DOM"]`, `window.setInterval` returns `number`. Using `window.setInterval` (not bare `setInterval`) ensures the return type is `number`, matching the `typewriterId: number | null` field. Bare `setInterval` might resolve to Node's `Timer` type in some TS configurations.
+- **CSS `@import` must be the first statement in CSS** — the Google Fonts `@import url(...)` must appear before any other CSS rules (except `@charset`). Placing it after `:root {}` would be silently ignored by the browser. Vite's CSS processing also requires this ordering.
+- **Did NOT touch main.ts/scene.ts** (G17 preserveDrawingBuffer lock preserved; integration deferred to Wave 4 per task constraint).

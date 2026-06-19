@@ -616,7 +616,7 @@ Max Concurrent: 5 (Wave 3)
 
   **Commit**: YES（group Wave 2）— `feat(debug): window.__game dev-only API`
 
-- [ ] 8. 对话框 UI 覆盖层
+- [x] 8. 对话框 UI 覆盖层
 
   **What to do**:
   - 创建 `src/ui/dialogue.ts` + `src/ui/dialogue.css`：
