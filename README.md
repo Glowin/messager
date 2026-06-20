@@ -45,6 +45,11 @@ npm run preview  # serve the built dist/
 
 Requires Node.js (Vite 5 / TypeScript 5.3+).
 
+## Deployment
+
+- **Vercel** (auto-detects Vite): `vercel --prod --yes` — build command `npm run build`, output `dist/`. Live: https://messager-swart.vercel.app
+- **GitHub**: https://github.com/Glowin/messager
+
 ## Architecture
 
 `src/main.ts` wires every module together — read it first.

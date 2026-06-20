@@ -38,7 +38,7 @@ These are guardrails verified by research; do not violate them without explicit 
 - **Runtime orientation**: incremental `rotateOnAxis` + `quaternion.premultiply` ONLY. Never `setFromUnitVectors(up, normal)` at runtime — it causes south-pole lockup (Hairy Ball theorem). One-time static setup (e.g. placing NPCs/scenery) is fine.
 - **Never `rotation.set()` Euler** for character orientation (gimbal lock). Limb animation via single-axis `rotation.x =` is OK (not orientation).
 - **Camera up**: `camera.up.copy(surfaceNormal)` every frame. A fixed world-up flips at the poles.
-- **Forward movement**: rotate BOTH `position.applyQuaternion(q)` AND `quaternion.premultiply(q)` around the `cross(up, forward)` axis — `rotateOnAxis` alone only changes orientation, not position.
+- **Forward movement**: rotate BOTH `position.applyQuaternion(q)` AND `quaternion.premultiply(q)` around the `cross(up, forward)` axis — `rotateOnAxis` alone only changes orientation, not position. The rotation angle must be **positive** for forward (W): since `getWorldDirection()` returns +Z (the facing direction), `cross(up, forward)` yields the right axis and a positive angle moves along the facing direction. A negative angle moves backward (this was a real bug — W went backward until the sign was corrected).
 
 ## Non-negotiable renderer setting
 
@@ -46,7 +46,17 @@ These are guardrails verified by research; do not violate them without explicit 
 
 ## Debug API
 
-`src/debug-api.ts` exposes `window.__game` (getters: `getPlayer/getCamera/getScene/getQuests`, actions: `teleport/completeQuest/pause/resume`, plus `isReady`/`fps`). Guarded by `if (!import.meta.env.DEV) return` — tree-shaken from PROD builds. `tickFps()` must be called each frame from the render loop.
+`src/debug-api.ts` exposes `window.__game` (getters: `getPlayer/getCamera/getScene/getQuests`, actions: `teleport/completeQuest/pause/resume`, plus `isReady`/`fps`). Guarded by `if (!import.meta.env.DEV) return` — tree-shaken from PROD builds. `tickFps()` must be called each frame from the render loop. The HUD's pause has no public method, so `pause()`/`resume()` toggle it via `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape' }))`.
+
+## QA / verification workflow
+
+No unit tests — verification is layered:
+
+1. **Module logic** (fast, no browser): `npx tsx -e "import {fn} from './src/X'; ..."` — check return values, data shapes, math. Modules importing `.css` need a dynamic `import()`.
+2. **Runtime state** (Playwright + `window.__game`): `page.evaluate(() => window.__game.getPlayer().position)`, `getQuests()`, etc. Prefer this over visual checks for logic correctness.
+3. **Visual** (Playwright screenshot + a vision-capable model): confirm "renders non-blank", cel bands visible, character/HUD present. `preserveDrawingBuffer:true` is required for screenshots to be non-blank.
+
+**Pole safety** (highest-risk edge case): `window.__game.teleport(0,-25,0)` (south pole) → check `getPlayer().up` has no NaN and the player still moves; for the camera, verify `getCamera().up · surfaceNormal > 0.95` at north pole, south pole, and 3 equator points. Wait ~300ms after `teleport()` for the main loop to update before reading state (reading immediately returns stale values).
 
 ## Audio
 
