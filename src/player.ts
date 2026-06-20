@@ -6,7 +6,7 @@ import { applyGravity } from './gravity';
 import { AudioManager } from './audio';
 
 const FORWARD_SPEED = 0.2;
-const TURN_SPEED = 0.6;
+const STRAFE_SPEED = 0.2;
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
 const GROUND_THRESHOLD = 0.01;
@@ -47,8 +47,6 @@ const KEY_MAP: Record<string, keyof InputState> = {
   ShiftRight: 'sprint',
 };
 
-const LOCAL_UP = new THREE.Vector3(0, 1, 0);
-
 export function createPlayer(_world?: unknown): Player {
   const group = createCharacter();
 
@@ -62,6 +60,7 @@ export function createPlayer(_world?: unknown): Player {
   let jumpRequested = false;
   let isGrounded = true;
   let currentAnim: AnimationState = 'idle';
+  let lastFacing = 0;
 
   function onKeyDown(e: KeyboardEvent): void {
     const action = KEY_MAP[e.code];
@@ -129,22 +128,24 @@ export function createPlayer(_world?: unknown): Player {
       sprinting = input.sprint;
       const speedMul = sprinting ? SPRINT_MULTIPLIER : 1.0;
 
-      if (input.turnLeft) {
-        group.rotateOnAxis(LOCAL_UP, TURN_SPEED * dt);
+      // Determine facing angle from movement input.
+      // Priority: forward > backward > left > right > keep last.
+      let facing = lastFacing;
+      if (input.forward) {
+        facing = 0;
+      } else if (input.backward) {
+        facing = Math.PI;
+      } else if (input.turnLeft) {
+        facing = -Math.PI / 2;
+      } else if (input.turnRight) {
+        facing = Math.PI / 2;
       }
-      if (input.turnRight) {
-        group.rotateOnAxis(LOCAL_UP, -TURN_SPEED * dt);
+      if (facing !== lastFacing) {
+        setFacing(group, facing);
+        lastFacing = facing;
       }
 
-      const wantForward = input.forward && !input.backward;
-      const wantBackward = input.backward && !input.forward;
-
-      if (wantForward) {
-        setFacing(group, false);
-      } else if (wantBackward) {
-        setFacing(group, true);
-      }
-
+      // Forward / backward.
       const moveDir = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
       if (moveDir !== 0) {
         group.getWorldDirection(_forward);
@@ -157,6 +158,20 @@ export function createPlayer(_world?: unknown): Player {
           group.quaternion.premultiply(_q);
           moving = true;
         }
+      }
+
+      // Strafe (A/D): rotate around forward axis — keeps group forward (and
+      // thus camera view) fixed. strafeDir=+1 (D) → -θ → +X (right);
+      // strafeDir=-1 (A) → +θ → -X (left).
+      const strafeDir =
+        (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0);
+      if (strafeDir !== 0) {
+        group.getWorldDirection(_forward);
+        const angle = -STRAFE_SPEED * speedMul * strafeDir * dt;
+        _q.setFromAxisAngle(_forward, angle);
+        group.position.applyQuaternion(_q);
+        group.quaternion.premultiply(_q);
+        moving = true;
       }
     }
 

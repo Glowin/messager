@@ -30,7 +30,7 @@ interface CharacterData {
   currentAction: THREE.AnimationAction | null;
   lastTime: number;
   model: THREE.Group | null;
-  facingBackward: boolean;
+  facingAngle: number;
 }
 
 const MODEL_URL = '/models/character.glb';
@@ -68,7 +68,7 @@ export function createCharacter(color?: number): THREE.Group {
     currentAction: null,
     lastTime: 0,
     model: null,
-    facingBackward: false,
+    facingAngle: 0,
   } as CharacterData;
 
   void loadModel(character, color);
@@ -155,7 +155,7 @@ async function loadModel(
     data.mixer = mixer;
     data.clips = clips;
     data.model = model;
-    model.rotation.y = data.facingBackward ? Math.PI : 0;
+    model.rotation.y = data.facingAngle;
 
     character.add(model);
 
@@ -232,15 +232,18 @@ export function setAnimation(char: THREE.Group, state: AnimationState): void {
 }
 
 /**
- * Set whether the character model faces backward (away from the group's
- * forward direction). Only rotates the GLB model child (single-axis Y), not
- * the group — so the camera view and movement math are unaffected.
+ * Set the character model's facing angle (radians, around local Y).
+ * 0 = forward (+Z), π = backward (-Z), π/2 = right (+X), -π/2 = left (-X).
+ *
+ * Only rotates the GLB model child (single-axis Y), not the group — so the
+ * camera view and movement math are unaffected. If the model is still
+ * loading, the angle is stored and applied once loading completes.
  */
-export function setFacing(char: THREE.Group, backward: boolean): void {
+export function setFacing(char: THREE.Group, yAngle: number): void {
   const data = char.userData as CharacterData;
-  data.facingBackward = backward;
+  data.facingAngle = yAngle;
   if (data.model) {
-    data.model.rotation.y = backward ? Math.PI : 0;
+    data.model.rotation.y = yAngle;
   }
 }
 
