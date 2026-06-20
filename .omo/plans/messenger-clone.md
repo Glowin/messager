@@ -233,9 +233,9 @@ Max Concurrent: 5 (Wave 3)
   - **External**: Vite vanilla-ts 模板标准结构
 
   **Acceptance Criteria**:
-  - [ ] `npm run dev` 启动后浏览器打开看到渲染的空场景（半球光+方向光，非纯黑）
-  - [ ] `npm run build` 产出 `dist/` 无错误
-  - [ ] `renderer.getContext().getContextAttributes().preserveDrawingbuffer === true`
+  - [x] `npm run dev` 启动后浏览器打开看到渲染的空场景（半球光+方向光，非纯黑）
+  - [x] `npm run build` 产出 `dist/` 无错误
+  - [x] `renderer.getContext().getContextAttributes().preserveDrawingbuffer === true`
 
   **QA Scenarios**:
   ```
@@ -298,9 +298,9 @@ Max Concurrent: 5 (Wave 3)
   - **Data**: 真实对话样本见 Context；任务目标大写、NPC 台词小写
 
   **Acceptance Criteria**:
-  - [ ] `src/types.ts` 导出所有接口，`tsc` 无错
-  - [ ] `src/data/quests.ts` 导出 5 个 Quest，每个 ≥1 step
-  - [ ] `src/data/npcs.ts` 导出 5 个 NPC，每个有对话
+  - [x] `src/types.ts` 导出所有接口，`tsc` 无错
+  - [x] `src/data/quests.ts` 导出 5 个 Quest，每个 ≥1 step
+  - [x] `src/data/npcs.ts` 导出 5 个 NPC，每个有对话
 
   **QA Scenarios**:
   ```
@@ -354,8 +354,8 @@ Max Concurrent: 5 (Wave 3)
   - **Pitfall**: gradientMap 必须 NearestFilter（LinearFilter 会变平滑渐变失去 cel 感）
 
   **Acceptance Criteria**:
-  - [ ] `createToonMaterial(0xff0000)` 返回 MeshToonMaterial，gradientMap 为 NearestFilter
-  - [ ] 场景中 toon 球体渲染出 ≥2 个离散色带 + 黑色轮廓
+  - [x] `createToonMaterial(0xff0000)` 返回 MeshToonMaterial，gradientMap 为 NearestFilter
+  - [x] 场景中 toon 球体渲染出 ≥2 个离散色带 + 黑色轮廓
 
   **QA Scenarios**:
   ```
@@ -409,9 +409,9 @@ Max Concurrent: 5 (Wave 3)
   - **Pattern**: 原游戏 bgm + 脚步/jump/quest-complete 音效（从资源清单）
 
   **Acceptance Criteria**:
-  - [ ] `AudioManager.playBgm()` 不报错（即使音频文件未就绪）
-  - [ ] `setMuted(true)` 后 Howler 全局静音
-  - [ ] 标题屏点击触发 `resume()` 解锁音频上下文
+  - [x] `AudioManager.playBgm()` 不报错（即使音频文件未就绪）
+  - [x] `setMuted(true)` 后 Howler 全局静音
+  - [x] 标题屏点击触发 `resume()` 解锁音频上下文
 
   **QA Scenarios**:
   ```
@@ -471,9 +471,9 @@ Max Concurrent: 5 (Wave 3)
   - **API**: `IcosahedronGeometry` — https://threejs.org/docs/#api/en/geometries/IcosahedronGeometry
 
   **Acceptance Criteria**:
-  - [ ] `snapToSurface(new Vector3(0,26,0))` 后 y≈25（贴球面）
-  - [ ] `getSurfaceNormal(new Vector3(0,26,0))` ≈ (0,1,0)
-  - [ ] 跳跃后玩家落回球面（径向速度归零）
+  - [x] `snapToSurface(new Vector3(0,26,0))` 后 y≈25（贴球面）
+  - [x] `getSurfaceNormal(new Vector3(0,26,0))` ≈ (0,1,0)
+  - [x] 跳跃后玩家落回球面（径向速度归零）
 
   **QA Scenarios**:
   ```
@@ -536,9 +536,9 @@ Max Concurrent: 5 (Wave 3)
   - **API**: `CapsuleGeometry`, `Group`, `rotateOnAxis`（腿摆动）
 
   **Acceptance Criteria**:
-  - [ ] `createCharacter()` 返回 Group，脚底在原点
-  - [ ] `setAnimation(char,'walk')` 后腿有可见摆动
-  - [ ] 视觉确认角色像"送信少年"（glm-4.6v）
+  - [x] `createCharacter()` 返回 Group，脚底在原点
+  - [x] `setAnimation(char,'walk')` 后腿有可见摆动
+  - [x] 视觉确认角色像"送信少年"（glm-4.6v）
 
   **QA Scenarios**:
   ```
@@ -599,8 +599,8 @@ Max Concurrent: 5 (Wave 3)
   - **API**: `import.meta.env.DEV`（Vite 内置）
 
   **Acceptance Criteria**:
-  - [ ] dev 模式 `window.__game` 存在且各 getter 可调
-  - [ ] `npm run build` 产物中 `window.__game` 不存在（grep dist 无 __game）
+  - [x] dev 模式 `window.__game` 存在且各 getter 可调
+  - [x] `npm run build` 产物中 `window.__game` 不存在（grep dist 无 __game）
 
   **QA Scenarios**:
   ```
@@ -649,9 +649,9 @@ Max Concurrent: 5 (Wave 3)
   - **Data**: `DialogueLine` 接口（Task 2）
 
   **Acceptance Criteria**:
-  - [ ] `showDialogue([{speaker:'OFFICE WORKER', text:'hi'}])` 显示名牌+台词
-  - [ ] 按 Space 推进到下一行，末行再按触发 onComplete
-  - [ ] 对话框隐藏后 DOM 清理
+  - [x] `showDialogue([{speaker:'OFFICE WORKER', text:'hi'}])` 显示名牌+台词
+  - [x] 按 Space 推进到下一行，末行再按触发 onComplete
+  - [x] 对话框隐藏后 DOM 清理
 
   **QA Scenarios**:
   ```
@@ -705,10 +705,10 @@ Max Concurrent: 5 (Wave 3)
   - **Controls**: WASD/方向键/Space/Shift（从 JS bundle 确认）
 
   **Acceptance Criteria**:
-  - [ ] 按 W 玩家沿球面前进（位置变化且始终贴球面，`|pos|-R < 0.1`）
-  - [ ] 按方向键转向后前进方向改变
-  - [ ] Space 跳跃后落回球面
-  - [ ] 南极/北极移动不锁死、不 NaN
+  - [x] 按 W 玩家沿球面前进（位置变化且始终贴球面，`|pos|-R < 0.1`）
+  - [x] 按方向键转向后前进方向改变
+  - [x] Space 跳跃后落回球面
+  - [x] 南极/北极移动不锁死、不 NaN
 
   **QA Scenarios**:
   ```
@@ -770,9 +770,9 @@ Max Concurrent: 5 (Wave 3)
   - **Data**: Task 2 的 `npcs.ts`
 
   **Acceptance Criteria**:
-  - [ ] 5 个 NPC 放置在球面，各带三角标记 + 名牌
-  - [ ] `getNearestNpc` 在阈值内返回正确 NPC
-  - [ ] 三角标记有漂浮动画
+  - [x] 5 个 NPC 放置在球面，各带三角标记 + 名牌
+  - [x] `getNearestNpc` 在阈值内返回正确 NPC
+  - [x] 三角标记有漂浮动画
 
   **QA Scenarios**:
   ```
@@ -824,9 +824,9 @@ Max Concurrent: 5 (Wave 3)
   - **Data**: Task 2 的 `quests.ts`
 
   **Acceptance Criteria**:
-  - [ ] `startQuest('quest_0')` 后状态变 active
-  - [ ] 推进所有步骤后 `isComplete` true，显示完成提示
-  - [ ] `getQuests()` 返回 5 个任务状态
+  - [x] `startQuest('quest_0')` 后状态变 active
+  - [x] 推进所有步骤后 `isComplete` true，显示完成提示
+  - [x] `getQuests()` 返回 5 个任务状态
 
   **QA Scenarios**:
   ```
@@ -883,9 +883,9 @@ Max Concurrent: 5 (Wave 3)
   - **API**: snapToSurface / getSurfaceNormal（Task 5）
 
   **Acceptance Criteria**:
-  - [ ] 3 区域各有可识别地标（红房/喷泉/水面）
-  - [ ] 所有物体贴球面且竖直
-  - [ ] 视觉确认 cel-shaded 小镇风格
+  - [x] 3 区域各有可识别地标（红房/喷泉/水面）
+  - [x] 所有物体贴球面且竖直
+  - [x] 视觉确认 cel-shaded 小镇风格
 
   **QA Scenarios**:
   ```
@@ -937,9 +937,9 @@ Max Concurrent: 5 (Wave 3)
   - **API**: `camera.up.copy()`, `camera.lookAt()`, `Vector3.lerp()`
 
   **Acceptance Criteria**:
-  - [ ] 相机始终在玩家后上方，看向玩家
-  - [ ] `cam.up · surfaceNormal > 0.95`（5 位置：北极/南极/赤道×3，AC-5）
-  - [ ] 极点不翻转
+  - [x] 相机始终在玩家后上方，看向玩家
+  - [x] `cam.up · surfaceNormal > 0.95`（5 位置：北极/南极/赤道×3，AC-5）
+  - [x] 极点不翻转
 
   **QA Scenarios**:
   ```
@@ -993,10 +993,10 @@ Max Concurrent: 5 (Wave 3)
   - **API**: Task 8 showDialogue, Task 10 getNearestNpc, Task 11 QuestManager
 
   **Acceptance Criteria**:
-  - [ ] 接近 NPC 按 E 弹对话
-  - [ ] 对话结束触发接任务 + NEXT UP overlay
-  - [ ] 携带物品到目标 NPC 按 E 完成任务
-  - [ ] 对话中玩家不动
+  - [x] 接近 NPC 按 E 弹对话
+  - [x] 对话结束触发接任务 + NEXT UP overlay
+  - [x] 携带物品到目标 NPC 按 E 完成任务
+  - [x] 对话中玩家不动
 
   **QA Scenarios**:
   ```
@@ -1056,9 +1056,9 @@ Max Concurrent: 5 (Wave 3)
   - **Data**: Task 2 对话
 
   **Acceptance Criteria**:
-  - [ ] 启动显示标题屏 + Begin
-  - [ ] 点击/Enter Begin → 音频解锁 → 开场对话
-  - [ ] 推进 2 句后进入 3D 世界，玩家可控
+  - [x] 启动显示标题屏 + Begin
+  - [x] 点击/Enter Begin → 音频解锁 → 开场对话
+  - [x] 推进 2 句后进入 3D 世界，玩家可控
 
   **QA Scenarios**:
   ```
@@ -1111,9 +1111,9 @@ Max Concurrent: 5 (Wave 3)
   - **API**: Task 4 AudioManager, Task 11 QuestManager
 
   **Acceptance Criteria**:
-  - [ ] 菜单按钮 + 音效按钮可见可点
-  - [ ] Esc 弹暂停菜单
-  - [ ] 当前任务提示常驻显示
+  - [x] 菜单按钮 + 音效按钮可见可点
+  - [x] Esc 弹暂停菜单
+  - [x] 当前任务提示常驻显示
 
   **QA Scenarios**:
   ```
