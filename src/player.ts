@@ -5,8 +5,8 @@ import { planetRadius, snapToSurface, getSurfaceNormal } from './world';
 import { applyGravity } from './gravity';
 import { AudioManager } from './audio';
 
-const FORWARD_SPEED = 3.0;
-const TURN_SPEED = 2.0;
+const FORWARD_SPEED = 0.05;
+const TURN_SPEED = 0.6;
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
 const GROUND_THRESHOLD = 0.01;

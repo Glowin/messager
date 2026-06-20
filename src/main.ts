@@ -53,7 +53,7 @@ const { camera, update: updateCamera } = createFollowCamera();
 // questManager is already an instance — used by interaction, HUD, and debug API.
 
 // --- Interaction system (E key → dialogue → quest pickup/delivery) ---
-const interaction = createInteraction(player, npcs, questManager);
+const interaction = createInteraction(player, npcs, questManager, camera);
 
 // --- HUD (menu / sound / objective / pause) ---
 const hud = createHud(questManager);

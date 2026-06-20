@@ -1,0 +1,44 @@
+UX Fix Evidence — 2026-06-20
+=============================
+
+## Fix 1: 降低移动速度 (src/player.ts)
+- FORWARD_SPEED: 3.0 → 1.5 (line 8)
+- TURN_SPEED: 2.0 → 1.2 (line 9)
+- SPRINT_MULTIPLIER: 1.8 (unchanged)
+
+## Fix 2: 点击 NPC 对话 (src/interaction.ts + src/main.ts)
+
+### interaction.ts changes:
+- Line 12: `import type * as THREE` → `import * as THREE` (runtime Raycaster/Vector2 needed)
+- Line 36-41: Signature updated — added `camera: THREE.PerspectiveCamera` param, renamed `_npcGroup` → `npcGroup`
+- Line 48-53: Added `raycaster`, `ndc`, `canvasEl` closure variables
+- Line 63-80: Added `onPointerDown` handler:
+  - Guards: dialogueActive → return; e.target !== canvasEl → return (UI misfire prevention)
+  - NDC computation from clientX/clientY
+  - raycaster.setFromCamera(ndc, camera)
+  - raycaster.intersectObjects(npcGroup.children, true) — recursive
+  - Traverse up from hit to find ancestor with userData.npcId
+  - Range check: getNearestNpc(player.position, 3) must match clicked NPC
+  - Triggers startDialogue(clickedNpc)
+- Line 128: Hint text: 'Press E to interact' → 'Press E or click to interact'
+- Line 181-182: Registered `pointerdown` listener alongside `keydown`
+
+### main.ts changes:
+- Line 56: `createInteraction(player, npcs, questManager)` → `createInteraction(player, npcs, questManager, camera)`
+
+## Verification Results:
+- `npx tsc --noEmit` → EXIT_CODE=0 ✓
+- `npm run build` → EXIT_CODE=0 ✓ (29 modules transformed, built in 514ms)
+- LSP diagnostics: 0 errors on player.ts, interaction.ts, main.ts ✓
+- Grep confirmed:
+  - player.ts: FORWARD_SPEED = 1.5, TURN_SPEED = 1.2
+  - interaction.ts: Raycaster (line 48), setFromCamera (line 69), intersectObjects (line 70), pointerdown (line 182)
+  - main.ts: createInteraction(player, npcs, questManager, camera) (line 56)
+
+## E-key dialogue preserved:
+- onKeyDown handler unchanged (lines 55-61)
+- Same startDialogue() path used for both E-key and click
+
+## UI misfire prevention:
+- onPointerDown checks `e.target !== canvasEl` → clicks on HUD buttons / dialogue box divs are ignored
+- canvasEl = document.querySelector('#app canvas')

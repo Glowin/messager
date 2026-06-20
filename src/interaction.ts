@@ -9,7 +9,7 @@
 //   3. During dialogue, player movement is disabled (player.setEnabled(false))
 //   4. "Press E" hint overlay shows when near an NPC
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import { getNearestNpc } from './npc';
 import type { QuestManager } from './quest';
 import { quests } from './data/quests';
@@ -24,18 +24,20 @@ export interface Interaction {
 }
 
 /**
- * Create the interaction system that wires E-key dialogue triggers to the
- * quest state machine.
+ * Create the interaction system that wires E-key and click dialogue triggers
+ * to the quest state machine.
  *
  * @param player       Player controller (Task 9) — movement disabled during dialogue.
- * @param _npcGroup    NPC group (Task 10) — unused; getNearestNpc uses npc.ts internal registry.
+ * @param npcGroup     NPC group (Task 10) — used for click raycasting; getNearestNpc uses npc.ts internal registry.
  * @param questManager Quest manager (Task 11) — startQuest / advanceStep / isComplete.
+ * @param camera       Perspective camera used for raycasting click → NPC.
  * @returns { update, isDialogueActive } — call update() every frame for hint display.
  */
 export function createInteraction(
   player: Player,
-  _npcGroup: THREE.Group,
+  npcGroup: THREE.Group,
   questManager: QuestManager,
+  camera: THREE.PerspectiveCamera,
 ): Interaction {
   let dialogueActive = false;
   let hasItem = false;
@@ -43,12 +45,41 @@ export function createInteraction(
   let hintEl: HTMLDivElement | null = null;
   let stylesInjected = false;
 
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  const canvasEl =
+    typeof document !== 'undefined'
+      ? document.querySelector<HTMLCanvasElement>('#app canvas')
+      : null;
+
   function onKeyDown(e: KeyboardEvent): void {
     if (e.code !== 'KeyE') return;
     if (dialogueActive) return;
     const nearest = getNearestNpc(player.position, INTERACTION_THRESHOLD);
     if (!nearest) return;
     void startDialogue(nearest);
+  }
+
+  function onPointerDown(e: PointerEvent): void {
+    if (dialogueActive) return;
+    // Only trigger on canvas clicks — ignore HUD/dialogue UI elements.
+    if (e.target !== canvasEl) return;
+    ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
+    ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObjects(npcGroup.children, true);
+    if (hits.length === 0) return;
+    // Traverse up from the hit mesh to find the NPC root group (has npcId).
+    let obj: THREE.Object3D | null = hits[0].object;
+    while (obj && !obj.userData.npcId) {
+      obj = obj.parent;
+    }
+    if (!obj) return;
+    const clickedNpc = obj as THREE.Group;
+    // Require the player to be in interaction range (consistent with E key).
+    const nearest = getNearestNpc(player.position, INTERACTION_THRESHOLD);
+    if (nearest !== clickedNpc) return;
+    void startDialogue(clickedNpc);
   }
 
   // Dynamic import avoids tsx CSS-import incompatibility (dialogue.ts imports
@@ -125,7 +156,7 @@ export function createInteraction(
       ensureStyles();
       hintEl = document.createElement('div');
       hintEl.className = 'interaction-hint';
-      hintEl.textContent = 'Press E to interact';
+      hintEl.textContent = 'Press E or click to interact';
       const mount = document.getElementById('app') ?? document.body;
       mount.appendChild(hintEl);
     }
@@ -148,6 +179,7 @@ export function createInteraction(
 
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('pointerdown', onPointerDown);
   }
 
   return {
