@@ -72,11 +72,11 @@
 - 极简音频 + `window.__game` 调试 API
 
 ### Definition of Done
-- [ ] `npm run build` 无错误，产物可在浏览器打开运行
-- [ ] 玩家能在球面任意位置行走，跨极点不锁死、相机不翻转
-- [ ] 5 个配送任务可完整接取→配送→完成
-- [ ] 所有 QA 场景通过（程序化断言 + 视觉截图）
-- [ ] 桌面浏览器（Chrome）稳定 60fps（中端机器）
+- [x] `npm run build` 无错误，产物可在浏览器打开运行
+- [x] 玩家能在球面任意位置行走，跨极点不锁死、相机不翻转
+- [x] 5 个配送任务可完整接取→配送→完成
+- [x] 所有 QA 场景通过（程序化断言 + 视觉截图）
+- [x] 桌面浏览器（Chrome）稳定 60fps（中端机器）
 
 ### Must Have
 - 球面重力（玩家始终贴球面，跳跃为径向速度）
@@ -1184,10 +1184,10 @@ page.evaluate(() => Math.abs(window.__game.getPlayer().position.length() - R - 1
 ```
 
 ### Final Checklist
-- [ ] 所有 Must Have 存在
-- [ ] 所有 Must NOT Have 缺席
-- [ ] `npm run build` 通过
-- [ ] 5 任务全流程可完成
-- [ ] 极点不锁死、相机不翻转
-- [ ] QA 证据齐全（.omo/evidence/）
-- [ ] 玩家操作流畅（60fps）
+- [x] 所有 Must Have 存在
+- [x] 所有 Must NOT Have 缺席
+- [x] `npm run build` 通过
+- [x] 5 任务全流程可完成
+- [x] 极点不锁死、相机不翻转
+- [x] QA 证据齐全（.omo/evidence/）
+- [x] 玩家操作流畅（60fps）
