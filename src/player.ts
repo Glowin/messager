@@ -7,7 +7,7 @@ import { AudioManager } from './audio';
 
 const FORWARD_SPEED = 0.2;
 const STRAFE_SPEED = 0.2;
-const CAMERA_TURN_SPEED = 0.05; // < STRAFE_SPEED — camera yaws slower than character
+const CAMERA_TURN_SPEED = 0.15; // < STRAFE_SPEED — camera yaws slower than character
 const LOCAL_UP = new THREE.Vector3(0, 1, 0); // local Y = surface normal (player up)
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
@@ -169,7 +169,7 @@ export function createPlayer(_world?: unknown): Player {
         (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0);
       if (strafeDir !== 0) {
         group.getWorldDirection(_forward);
-        const angle = -STRAFE_SPEED * speedMul * strafeDir * dt;
+        const angle = STRAFE_SPEED * speedMul * strafeDir * dt;
         _q.setFromAxisAngle(_forward, angle);
         group.position.applyQuaternion(_q);
         group.quaternion.premultiply(_q);
