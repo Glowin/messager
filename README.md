@@ -76,7 +76,8 @@ See [`AGENTS.md`](./AGENTS.md) for non-obvious technical constraints (Three.js r
 ## Credits
 
 - Original game: **Messenger** by [Abeto](https://abeto.co/) — this is a non-commercial study/clone.
-- Audio: CC0 placeholder (replace with real CC0 assets from [freesound](https://freesound.org/) etc.).
+- BGM: "Drifting Through Fog" from [open-lofi](https://github.com/btahir/open-lofi) by btahir (CC0 1.0).
+- SFX: CC0 placeholder (replace with real CC0 assets from [freesound](https://freesound.org/) etc.).
 
 ## License
 

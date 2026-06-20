@@ -62,6 +62,10 @@ No unit tests — verification is layered:
 
 Howler. Browser AudioContext starts `suspended` — `AudioManager.resume()` must be called from a user gesture (the Begin button click in `intro.ts`). Howler has no `muted()` getter; use `AudioManager.isMuted()`.
 
+**Audio wiring gotcha**: `AudioManager` can be correctly implemented yet produce no sound if its methods are never called. `playBgm()` must be invoked in the intro `onStart` callback (after `resume()` unlocks the context); `playSfx('jump'/'footstep'/'dialogue')` must be wired at their trigger points in `player.ts` / `dialogue.ts`. If audio is silent, first grep for `playBgm(`/`playSfx(` call sites — the bug is usually "never called", not "broken implementation".
+
+**Howler QA** (verify playback programmatically): inspect `window.Howler._howls` — find the bgm howl by `h._src.includes('bgm')`, then check `h.playing()` and `h.duration()`. Check `window.Howler.ctx.state === 'running'` to confirm the AudioContext unlocked. (Actual sound output can't be heard in headless — these checks confirm the wiring is live.)
+
 ## TypeScript config notes
 
 - `isolatedModules: true` → use `import type` for type-only imports.
