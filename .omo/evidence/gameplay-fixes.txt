@@ -1,0 +1,50 @@
+Gameplay Fixes — 5 Issues Fixed
+================================
+Date: 2026-06-21
+
+## Fix 1: FORWARD_SPEED (src/player.ts)
+- Changed: FORWARD_SPEED 0.05 → 0.2
+- Grep confirm: `const FORWARD_SPEED = 0.2;` (line 8)
+
+## Fix 2: dt clamp for tab-switch safety (src/main.ts + src/player.ts)
+- Root cause: Browser pauses requestAnimationFrame when tab inactive;
+  clock.getDelta() returns huge dt (seconds) on return → character flips/flies.
+- Fix: Clamp dt to max 0.1s in both main loop and player.update().
+- main.ts line 107: `const dt = Math.min(clock.getDelta(), 0.1);`
+- player.ts line 109: `dt = Math.min(dt, 0.1);`
+
+## Fix 3: NPC marker/nametag height (src/npc.ts)
+- Root cause: GLB character TARGET_HEIGHT=2.0 (character.ts line 35),
+  but MARKER_BASE_Y=4.0 and NAMETAG_Y=4.8 were calibrated for old ~3.4 tall primitive.
+- Fix: MARKER_BASE_Y 4.0 → 2.5 (0.5 above head top at 2.0)
+       NAMETAG_Y 4.8 → 3.0 (0.5 above marker)
+
+## Fix 4: crossFadeTo animation transitions (src/character.ts)
+- Root cause: playAnimation hard-cut (currentAction.stop(); newAction.reset().play())
+  caused jump→walk/idle abrupt snap.
+- Fix: Use crossFadeTo(0.2s) for smooth transition.
+  character.ts line 203-209:
+    if (data.currentAction) {
+      newAction.reset();
+      newAction.play();
+      data.currentAction.crossFadeTo(newAction, 0.2, false);
+    } else {
+      newAction.reset().play();
+    }
+
+## Fix 5: S key turn — no moonwalk (src/player.ts)
+- Root cause: S (backward) moved with moveDir=-1, character kept facing forward → moonwalk.
+- Fix: Added `facingBackward` state. S turns 180° (rotateOnAxis(LOCAL_UP, PI)),
+  W turns back. moveDir always 1 when moving (character faces movement direction).
+- player.ts: facingBackward declared line 65, turn logic lines 143-151,
+  moveDir line 153.
+
+## Verification
+- `npx tsc --noEmit` → EXIT 0
+- `npm run build` → EXIT 0 (tsc + vite build, 32 modules transformed, 641ms)
+- LSP diagnostics: clean (no errors) on player.ts, character.ts, npc.ts, main.ts
+- Grep confirmations:
+  - FORWARD_SPEED = 0.2 ✓
+  - Math.min dt clamp in player.ts + main.ts ✓
+  - crossFadeTo in character.ts ✓
+  - facingBackward in player.ts (5 occurrences) ✓

@@ -104,7 +104,7 @@ installDebugApi(getState);
 const clock = new THREE.Clock();
 
 function animate(): void {
-  const dt = clock.getDelta();
+  const dt = Math.min(clock.getDelta(), 0.1); // clamp — prevents huge dt on tab-switch
   const time = clock.elapsedTime;
 
   tickFps();

@@ -5,7 +5,7 @@ import { planetRadius, snapToSurface, getSurfaceNormal } from './world';
 import { applyGravity } from './gravity';
 import { AudioManager } from './audio';
 
-const FORWARD_SPEED = 0.05;
+const FORWARD_SPEED = 0.2;
 const TURN_SPEED = 0.6;
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
@@ -62,6 +62,7 @@ export function createPlayer(_world?: unknown): Player {
   let jumpRequested = false;
   let isGrounded = true;
   let currentAnim: AnimationState = 'idle';
+  let facingBackward = false;
 
   function onKeyDown(e: KeyboardEvent): void {
     const action = KEY_MAP[e.code];
@@ -105,6 +106,7 @@ export function createPlayer(_world?: unknown): Player {
   const _q = new THREE.Quaternion();
 
   function update(dt: number, time: number): void {
+    dt = Math.min(dt, 0.1); // clamp dt — prevents flip on tab-switch (huge dt from paused rAF)
     _up.copy(getSurfaceNormal(group.position));
     group.up.copy(_up);
 
@@ -135,7 +137,20 @@ export function createPlayer(_world?: unknown): Player {
         group.rotateOnAxis(LOCAL_UP, -TURN_SPEED * dt);
       }
 
-      const moveDir = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
+      // Turn to face movement direction (no moonwalk): S turns 180°, W turns back.
+      const wantForward = input.forward && !input.backward;
+      const wantBackward = input.backward && !input.forward;
+
+      if (wantForward && facingBackward) {
+        group.rotateOnAxis(LOCAL_UP, Math.PI);
+        facingBackward = false;
+      }
+      if (wantBackward && !facingBackward) {
+        group.rotateOnAxis(LOCAL_UP, Math.PI);
+        facingBackward = true;
+      }
+
+      const moveDir = (wantForward || wantBackward) ? 1 : 0;
       if (moveDir !== 0) {
         group.getWorldDirection(_forward);
         _axis.crossVectors(_up, _forward);

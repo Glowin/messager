@@ -201,9 +201,12 @@ function playAnimation(char: THREE.Group, state: AnimationState): void {
   if (data.currentAction === newAction) return;
 
   if (data.currentAction) {
-    data.currentAction.stop();
+    newAction.reset();
+    newAction.play();
+    data.currentAction.crossFadeTo(newAction, 0.2, false); // 0.2s smooth fade
+  } else {
+    newAction.reset().play();
   }
-  newAction.reset().play();
   data.currentAction = newAction;
 }
 

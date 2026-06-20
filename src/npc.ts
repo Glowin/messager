@@ -23,11 +23,11 @@ import { npcs as npcData } from './data/npcs';
 const MARKER_COLOR = 0xffd700; // yellow
 const MARKER_RADIUS = 0.3;
 const MARKER_HEIGHT = 0.5;
-const MARKER_BASE_Y = 4.0; // above NPC feet (character is ~3.4 tall)
+const MARKER_BASE_Y = 2.5; // above NPC feet (character head ~2.0 = TARGET_HEIGHT, marker just above)
 const MARKER_FLOAT_AMP = 0.15;
 const MARKER_FLOAT_SPEED = 2;
 const MARKER_SPIN_SPEED = 1.5;
-const NAMETAG_Y = 4.8;
+const NAMETAG_Y = 3.0;
 
 interface NpcInstance {
   group: THREE.Group;
