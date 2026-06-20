@@ -9,7 +9,7 @@
 //   3. During dialogue, player movement is disabled (player.setEnabled(false))
 //   4. "Press E" hint overlay shows when near an NPC
 
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import { getNearestNpc } from './npc';
 import type { QuestManager } from './quest';
 import { quests } from './data/quests';
@@ -28,16 +28,16 @@ export interface Interaction {
  * to the quest state machine.
  *
  * @param player       Player controller (Task 9) — movement disabled during dialogue.
- * @param npcGroup     NPC group (Task 10) — used for click raycasting; getNearestNpc uses npc.ts internal registry.
+ * @param _npcGroup    NPC group (Task 10) — unused at runtime; getNearestNpc uses npc.ts internal registry.
  * @param questManager Quest manager (Task 11) — startQuest / advanceStep / isComplete.
- * @param camera       Perspective camera used for raycasting click → NPC.
+ * @param _camera      Perspective camera — unused after switching click logic to proximity-based trigger.
  * @returns { update, isDialogueActive } — call update() every frame for hint display.
  */
 export function createInteraction(
   player: Player,
-  npcGroup: THREE.Group,
+  _npcGroup: THREE.Group,
   questManager: QuestManager,
-  camera: THREE.PerspectiveCamera,
+  _camera: THREE.PerspectiveCamera,
 ): Interaction {
   let dialogueActive = false;
   let hasItem = false;
@@ -45,8 +45,6 @@ export function createInteraction(
   let hintEl: HTMLDivElement | null = null;
   let stylesInjected = false;
 
-  const raycaster = new THREE.Raycaster();
-  const ndc = new THREE.Vector2();
   const canvasEl =
     typeof document !== 'undefined'
       ? document.querySelector<HTMLCanvasElement>('#app canvas')
@@ -64,22 +62,10 @@ export function createInteraction(
     if (dialogueActive) return;
     // Only trigger on canvas clicks — ignore HUD/dialogue UI elements.
     if (e.target !== canvasEl) return;
-    ndc.x = (e.clientX / window.innerWidth) * 2 - 1;
-    ndc.y = -(e.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(ndc, camera);
-    const hits = raycaster.intersectObjects(npcGroup.children, true);
-    if (hits.length === 0) return;
-    // Traverse up from the hit mesh to find the NPC root group (has npcId).
-    let obj: THREE.Object3D | null = hits[0].object;
-    while (obj && !obj.userData.npcId) {
-      obj = obj.parent;
-    }
-    if (!obj) return;
-    const clickedNpc = obj as THREE.Group;
-    // Require the player to be in interaction range (consistent with E key).
+    // Proximity-based (not raycast): GLB characters are small and raycasts
+    // frequently miss. Uses the same logic as the E key for reliability.
     const nearest = getNearestNpc(player.position, INTERACTION_THRESHOLD);
-    if (nearest !== clickedNpc) return;
-    void startDialogue(clickedNpc);
+    if (nearest) void startDialogue(nearest);
   }
 
   // Dynamic import avoids tsx CSS-import incompatibility (dialogue.ts imports

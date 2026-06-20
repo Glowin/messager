@@ -1,0 +1,75 @@
+Task: Replace primitive humanoid with CC0 GLB character model (Quaternius Animated Human)
+Date: 2026-06-20
+
+## Files Changed
+- src/character.ts — REWRITTEN: GLTFLoader async load, SkeletonUtils.clone, toon material swap, AnimationMixer
+- src/player.ts — Updated: added 'jump' (airborne), 'run' (sprint+moving) animation states
+- src/npc.ts — Updated: createCharacter(npc.color) replaces recolorShirt; removed SHIRT_COLOR/recolorShirt
+
+## GLB Model Details
+- File: public/models/character.glb (698 KB, Quaternius Animated Human, CC0)
+- Mesh: Human_Mesh (single skinned mesh, 4733 vertices, 41 bones)
+- Original material: MeshStandardMaterial color 0xe7e7e7 (gray), no texture
+- Animations (8 total): Idle, Walk, Run, Jump, Punch, Death, Working, ArmatureAction.002
+- Original size: ~363 units tall (Y) — scaled to 2.0 units via model.scale = 0.361
+
+## Key Implementation Details
+- GLTFLoader loads /models/character.glb once (cached in gltfCache); subsequent characters use SkeletonUtils.clone()
+- Bounding box computed from mesh geometry only (NOT Box3.setFromObject which includes bone positions — 66x larger)
+- computeMeshBounds() helper: traverses meshes, uses Box3.setFromBufferAttribute + applyMatrix4
+- Materials swapped to createToonMaterial(color) — single material per character
+- AnimationMixer per character; clips shared from cache (AnimationClip is just data)
+- Animation mapping: idle→Idle, walk→Walk, run→Run, jump→Jump, talk→Idle (fallback)
+- setAnimation stores desired state; plays immediately if mixer ready, else deferred to loadModel
+- updateCharacter: dt = time - lastTime (first frame dt=0), clamped to MAX_DT=0.1 (prevents post-pause jumps)
+- Fallback: simple primitive humanoid (capsule+icosahedron) if GLB fails to load
+
+## Verification Results
+
+### Build
+- npx tsc --noEmit: exit 0
+- npm run build: exit 0 (32 modules, 669 KB bundle / 176 KB gzip)
+
+### Runtime (Playwright + window.__game)
+- Player character: GLB loaded, 4733 vertices, 41 bones, isSkinned=true
+- Material: MeshToonMaterial, color 0xe7e7e7 (player default)
+- Mixer: hasMixer=true, clipsCount=5 (idle/walk/run/jump/talk)
+- Model scale: 0.361 (effective height ~2.0 units), position.y=0.005 (feet at y≈0)
+
+### Animation States (all verified)
+- idle: animState="idle" when standing still ✓
+- walk: animState="walk" when W held; bone rotations change significantly:
+  - Hips ry: -0.749 (idle) → 0.078 (walk1) → 0.120 (walk2)
+  - LeftUpLeg rx: -0.458 (idle) → 0.003 (walk1) → -0.058 (walk2)
+  - RightUpLeg rx: -0.088 (idle) → -0.546 (walk1) → -0.624 (walk2)
+  - LeftArm rx: 0.895 (idle) → 0.647 (walk1) → 0.553 (walk2)
+  - Walk cycle progresses between frames (walk1→walk2 bone rotations differ) ✓
+- run: animState="run" when ShiftLeft+W held ✓
+- jump: animState="jump" when Space pressed; player position shows jump arc:
+  - before: [0, 24.73, 3.66] (on surface)
+  - jumping (200ms): [0, 25.72, 3.81] (rising)
+  - after (1s): [0, 25.75, 3.81] (near apex)
+  - landed: animState returns to "idle" after landing ✓
+
+### NPCs (all 5 verified)
+| NPC | Color | matColor | isSkinned | hasMixer | clipsCount | animState |
+|-----|-------|----------|-----------|----------|------------|-----------|
+| Office Worker | 0x808080 | 808080 | true | true | 5 | idle |
+| Young Kid | 0xffd700 | ffd700 | true | true | 5 | idle |
+| Dave the Musician | 0x4169e1 | 4169e1 | true | true | 5 | idle |
+| Doctor Frieb | 0xffffff | ffffff | true | true | 5 | idle |
+| Cave Man | 0x8b4513 | 8b4513 | true | true | 5 | idle |
+
+### Visual
+- Screenshot: .omo/evidence/character-glb.png
+- GLB humanoid character visible (not primitive shapes)
+- Cel-shaded (MeshToonMaterial with gradientMap)
+- Gold NPC (Young Kid) visible with yellow triangle quest marker
+- World renders correctly (planet, trees, fountain, bench, signpost)
+
+## Gotchas
+- **Box3.setFromObject includes bone positions for skinned meshes** — the skeleton's bind pose spans ~364 units while the actual mesh geometry is only ~5.5 units tall (mesh local scale 69.18 × geometry 0.08). Using setFromObject for scale calculation produced a character 66x too small (0.03 units). Fix: computeMeshBounds() uses Box3.setFromBufferAttribute on mesh geometry only, transformed by matrixWorld.
+- **SkeletonUtils exports named functions, not a namespace** — `import { SkeletonUtils }` fails; must use `import { clone as cloneSkeleton }`.
+- **Animation clip names have "Human Armature|" prefix** — matched via case-insensitive includes('idle'/'walk'/'run'/'jump').
+- **Model is single mesh with single material** — can't separate clothing/skin/hair by mesh name. NPCs are uniformly colored (spec allows: "或全部服装统一色").
+- **dt clamping needed** — when game is paused (hud.isPaused), clock.elapsedTime keeps advancing but updateCharacter isn't called. On resume, dt = time - lastTime would be huge. Clamped to MAX_DT=0.1.

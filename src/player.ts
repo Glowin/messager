@@ -122,9 +122,11 @@ export function createPlayer(_world?: unknown): Player {
     }
 
     let moving = false;
+    let sprinting = false;
     if (isGrounded && enabled) {
       const input = getInputState();
-      const speedMul = input.sprint ? SPRINT_MULTIPLIER : 1.0;
+      sprinting = input.sprint;
+      const speedMul = sprinting ? SPRINT_MULTIPLIER : 1.0;
 
       if (input.turnLeft) {
         group.rotateOnAxis(LOCAL_UP, TURN_SPEED * dt);
@@ -162,7 +164,16 @@ export function createPlayer(_world?: unknown): Player {
       footstepTimer = 0;
     }
 
-    const newAnim: AnimationState = moving ? 'walk' : 'idle';
+    let newAnim: AnimationState;
+    if (!isGrounded) {
+      newAnim = 'jump';
+    } else if (moving && sprinting) {
+      newAnim = 'run';
+    } else if (moving) {
+      newAnim = 'walk';
+    } else {
+      newAnim = 'idle';
+    }
     if (newAnim !== currentAnim) {
       setAnimation(group, newAnim);
       currentAnim = newAnim;

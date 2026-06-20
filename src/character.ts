@@ -1,201 +1,275 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { createToonMaterial } from './cel-material';
 
 /**
- * Low-poly humanoid character built entirely from Three.js primitives.
+ * Character module — loads a CC0 GLB model (Quaternius Animated Human) and
+ * plays skeletal animations via AnimationMixer.
  *
- * Appearance (matches original game): black short hair / yellow T-shirt /
- * red shorts / white socks / red shoes / brown backpack.
+ * API (unchanged from the primitive version):
+ *   createCharacter(color?)  → THREE.Group (sync return; GLB loads async)
+ *   setAnimation(char, state) → switch animation state
+ *   updateCharacter(char, time) → drive the mixer one frame
  *
- * Structure:
- *   character (Group, origin at feet y=0)
- *   ├── bodyGroup (Group at hip height — breathes during idle/talk)
- *   │   ├── body (yellow capsule)
- *   │   ├── head (skin icosahedron)
- *   │   ├── hair (flattened black sphere)
- *   │   ├── leftArm / rightArm (yellow capsules)
- *   │   └── backpack (brown box)
- *   ├── leftLeg (Object3D pivot at hip — rotates for walk)
- *   │   ├── shorts (red capsule)
- *   │   ├── sock (white capsule)
- *   │   └── shoe (red box)
- *   └── rightLeg (Object3D pivot at hip — rotates for walk)
- *       ├── shorts / sock / shoe
+ * The GLB is fetched once and cached; subsequent characters clone the cached
+ * scene via SkeletonUtils (proper skinned-mesh skeleton cloning). Materials
+ * are swapped to cel-shaded MeshToonMaterial to match the game's art style.
  *
- * Animation is fully procedural (sin-driven), no skeletal/bone system.
- * All materials are cel-shaded toon (flatShading handled by createToonMaterial).
+ * Animation states: idle | walk | run | jump | talk.
+ * The Quaternius pack includes Idle/Walk/Run/Jump (and Punch/Death/Working).
+ * 'talk' has no dedicated clip → falls back to 'idle'.
  */
 
-export type AnimationState = 'idle' | 'walk' | 'talk';
+export type AnimationState = 'idle' | 'walk' | 'run' | 'jump' | 'talk';
 
 interface CharacterData {
   animationState: AnimationState;
-  leftLeg: THREE.Object3D;
-  rightLeg: THREE.Object3D;
-  bodyGroup: THREE.Group;
-  head: THREE.Mesh;
-  hipHeight: number;
+  mixer: THREE.AnimationMixer | null;
+  clips: Map<AnimationState, THREE.AnimationClip>;
+  currentAction: THREE.AnimationAction | null;
+  lastTime: number;
 }
 
-// Colors matching the original character appearance.
-const COLOR_SKIN = 0xf0c8a0;
-const COLOR_HAIR = 0x1a1a1a;
-const COLOR_SHIRT = 0xffdd00;
-const COLOR_SHORTS = 0xcc2222;
-const COLOR_SOCK = 0xffffff;
-const COLOR_SHOE = 0xcc2222;
-const COLOR_BACKPACK = 0x8b4513;
+const MODEL_URL = '/models/character.glb';
+const TARGET_HEIGHT = 2.0; // world units — character fits camera framing
+const MAX_DT = 0.1; // clamp mixer dt to prevent post-pause animation jumps
+const ORIGINAL_COLOR = 0xe7e7e7; // GLB's original material color (fallback)
 
-const HIP_HEIGHT = 0.9;
+/** Cached GLTF result so the model is fetched only once. */
+interface GltfCache {
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
+}
+let gltfCache: GltfCache | null = null;
+let gltfPromise: Promise<GltfCache> | null = null;
 
 /**
- * Build the humanoid character from primitives.
+ * Create a character from the GLB model.
  *
- * @returns THREE.Group with feet at the origin (y=0), facing +Z.
+ * Returns immediately with an empty placeholder Group. The GLB loads
+ * asynchronously; once ready, the model is scaled, materials are swapped to
+ * toon, and the idle animation starts. If loading fails, a simple primitive
+ * humanoid is used as fallback (no blank screen).
+ *
+ * @param color Optional outfit color (NPCs). If omitted, the model's original
+ *              gray color is used.
+ * @returns THREE.Group with feet at y=0, facing +Z.
  */
-export function createCharacter(): THREE.Group {
+export function createCharacter(color?: number): THREE.Group {
   const character = new THREE.Group();
 
-  // Shared materials — one per color, reused across meshes of the same color.
-  const skinMat = createToonMaterial(COLOR_SKIN);
-  const hairMat = createToonMaterial(COLOR_HAIR);
-  const shirtMat = createToonMaterial(COLOR_SHIRT);
-  const shortsMat = createToonMaterial(COLOR_SHORTS);
-  const sockMat = createToonMaterial(COLOR_SOCK);
-  const shoeMat = createToonMaterial(COLOR_SHOE);
-  const backpackMat = createToonMaterial(COLOR_BACKPACK);
-
-  // --- Upper body group (moves with breathing during idle/talk) ---
-  const bodyGroup = new THREE.Group();
-  bodyGroup.position.y = HIP_HEIGHT;
-  character.add(bodyGroup);
-
-  // Torso — yellow T-shirt capsule (radius 0.4, cylinder length 0.8).
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.4, 0.8, 4, 8),
-    shirtMat,
-  );
-  body.position.y = 0.8; // center above hip
-  bodyGroup.add(body);
-
-  // Head — skin icosahedron (low-poly facets pair with flatShading).
-  const head = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.5, 0),
-    skinMat,
-  );
-  head.position.y = 2.1; // above torso
-  bodyGroup.add(head);
-
-  // Hair — flattened black sphere sitting on top of the head.
-  const hair = new THREE.Mesh(
-    new THREE.SphereGeometry(0.52, 8, 6),
-    hairMat,
-  );
-  hair.scale.set(1, 0.5, 1);
-  hair.position.y = 2.25;
-  bodyGroup.add(hair);
-
-  // Arms — yellow capsules (T-shirt sleeves) at shoulder height.
-  const armGeo = new THREE.CapsuleGeometry(0.1, 0.5, 4, 6);
-  const leftArm = new THREE.Mesh(armGeo, shirtMat);
-  leftArm.position.set(-0.45, 1.3, 0);
-  bodyGroup.add(leftArm);
-  const rightArm = new THREE.Mesh(armGeo, shirtMat);
-  rightArm.position.set(0.45, 1.3, 0);
-  bodyGroup.add(rightArm);
-
-  // Backpack — brown box on the back (-Z).
-  const backpack = new THREE.Mesh(
-    new THREE.BoxGeometry(0.45, 0.5, 0.25),
-    backpackMat,
-  );
-  backpack.position.set(0, 0.85, -0.38);
-  bodyGroup.add(backpack);
-
-  // --- Legs (independent Object3D pivots at hip for walk animation) ---
-  const shortsGeo = new THREE.CapsuleGeometry(0.13, 0.15, 4, 6);
-  const sockGeo = new THREE.CapsuleGeometry(0.12, 0.1, 4, 6);
-  const shoeGeo = new THREE.BoxGeometry(0.3, 0.1, 0.45);
-
-  // Left leg pivot — rotateOnAxis/rotation.x swings the whole leg.
-  const leftLeg = new THREE.Object3D();
-  leftLeg.position.set(-0.17, HIP_HEIGHT, 0);
-  character.add(leftLeg);
-  const leftShorts = new THREE.Mesh(shortsGeo, shortsMat);
-  leftShorts.position.y = -0.205;
-  leftLeg.add(leftShorts);
-  const leftSock = new THREE.Mesh(sockGeo, sockMat);
-  leftSock.position.y = -0.58;
-  leftLeg.add(leftSock);
-  const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
-  leftShoe.position.y = -0.85; // shoe bottom at y=0 (feet on ground)
-  leftLeg.add(leftShoe);
-
-  // Right leg pivot.
-  const rightLeg = new THREE.Object3D();
-  rightLeg.position.set(0.17, HIP_HEIGHT, 0);
-  character.add(rightLeg);
-  const rightShorts = new THREE.Mesh(shortsGeo, shortsMat);
-  rightShorts.position.y = -0.205;
-  rightLeg.add(rightShorts);
-  const rightSock = new THREE.Mesh(sockGeo, sockMat);
-  rightSock.position.y = -0.58;
-  rightLeg.add(rightSock);
-  const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
-  rightShoe.position.y = -0.85;
-  rightLeg.add(rightShoe);
-
-  // Store animation references on userData.
   character.userData = {
     animationState: 'idle' as AnimationState,
-    leftLeg,
-    rightLeg,
-    bodyGroup,
-    head,
-    hipHeight: HIP_HEIGHT,
-  };
+    mixer: null,
+    clips: new Map<AnimationState, THREE.AnimationClip>(),
+    currentAction: null,
+    lastTime: 0,
+  } as CharacterData;
+
+  void loadModel(character, color);
 
   return character;
+}
+
+/** Compute bounding box from mesh geometry only (excludes skeleton bones). */
+function computeMeshBounds(model: THREE.Object3D): THREE.Box3 {
+  model.updateMatrixWorld(true);
+  const box = new THREE.Box3();
+  model.traverse((obj) => {
+    if (obj instanceof THREE.Mesh && obj.geometry?.attributes?.position) {
+      const geoBox = new THREE.Box3().setFromBufferAttribute(
+        obj.geometry.attributes.position,
+      );
+      geoBox.applyMatrix4(obj.matrixWorld);
+      box.union(geoBox);
+    }
+  });
+  return box;
+}
+
+/** Load (or return cached) GLTF — single fetch for all characters. */
+function loadGltf(): Promise<GltfCache> {
+  if (gltfCache) return Promise.resolve(gltfCache);
+  if (gltfPromise) return gltfPromise;
+  const loader = new GLTFLoader();
+  gltfPromise = loader
+    .loadAsync(MODEL_URL)
+    .then((gltf) => {
+      gltfCache = { scene: gltf.scene, animations: gltf.animations };
+      return gltfCache;
+    })
+    .catch((err) => {
+      // Reset promise so a retry is possible; re-throw for the caller.
+      gltfPromise = null;
+      throw err;
+    });
+  return gltfPromise;
+}
+
+/** Async load + setup: clone, scale, swap materials, init mixer, play idle. */
+async function loadModel(
+  character: THREE.Group,
+  color?: number,
+): Promise<void> {
+  try {
+    const cache = await loadGltf();
+
+    // SkeletonUtils.clone properly duplicates skinned-mesh skeletons.
+    const model = cloneSkeleton(cache.scene) as THREE.Group;
+
+    // Scale to target height. We compute bounds from mesh geometry only —
+    // Box3.setFromObject includes bone/skeleton positions which are much
+    // larger than the actual mesh, producing a wildly incorrect scale.
+    const box = computeMeshBounds(model);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    if (size.y > 0) {
+      model.scale.setScalar(TARGET_HEIGHT / size.y);
+    }
+
+    // Shift so feet (min Y) are at y=0.
+    const box2 = computeMeshBounds(model);
+    model.position.y = -box2.min.y;
+
+    // Swap all materials to cel-shaded toon.
+    const toonColor = color ?? ORIGINAL_COLOR;
+    const toonMat = createToonMaterial(toonColor);
+    model.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.material = toonMat;
+        obj.castShadow = false;
+        obj.receiveShadow = false;
+      }
+    });
+
+    // Animation mixer + clip mapping.
+    const mixer = new THREE.AnimationMixer(model);
+    const clips = mapAnimations(cache.animations);
+
+    const data = character.userData as CharacterData;
+    data.mixer = mixer;
+    data.clips = clips;
+
+    character.add(model);
+
+    // Play the initial (or previously-requested) animation state.
+    playAnimation(character, data.animationState);
+  } catch (e) {
+    console.warn('[character] GLB load failed, using primitive fallback:', e);
+    createFallback(character, color);
+  }
+}
+
+/**
+ * Map GLTF animation clips to AnimationState keys by name (case-insensitive).
+ * The Quaternius pack names clips "Human Armature|<Name>" — we match the
+ * suffix. 'talk' has no dedicated clip → falls back to 'idle'.
+ */
+function mapAnimations(
+  animations: THREE.AnimationClip[],
+): Map<AnimationState, THREE.AnimationClip> {
+  const clips = new Map<AnimationState, THREE.AnimationClip>();
+
+  const find = (keyword: string): THREE.AnimationClip | undefined =>
+    animations.find((a) => a.name.toLowerCase().includes(keyword));
+
+  const idle = find('idle');
+  const walk = find('walk');
+  const run = find('run');
+  const jump = find('jump');
+
+  if (idle) clips.set('idle', idle);
+  if (walk) clips.set('walk', walk);
+  if (run) clips.set('run', run);
+  if (jump) clips.set('jump', jump);
+  // 'talk' — no dedicated clip; fall back to idle.
+  if (idle) clips.set('talk', idle);
+
+  return clips;
+}
+
+/** Stop the current action and play the clip for the given state. */
+function playAnimation(char: THREE.Group, state: AnimationState): void {
+  const data = char.userData as CharacterData;
+  if (!data.mixer) return;
+
+  const clip = data.clips.get(state) ?? data.clips.get('idle');
+  if (!clip) return;
+
+  const newAction = data.mixer.clipAction(clip);
+  if (data.currentAction === newAction) return;
+
+  if (data.currentAction) {
+    data.currentAction.stop();
+  }
+  newAction.reset().play();
+  data.currentAction = newAction;
 }
 
 /**
  * Set the character's current animation state.
  *
- * Call once when the state changes (e.g. player starts/stops moving).
+ * If the model is still loading, the state is stored and will be applied
+ * once loading completes. If the model is loaded, the animation switches
+ * immediately.
  */
 export function setAnimation(char: THREE.Group, state: AnimationState): void {
-  (char.userData as CharacterData).animationState = state;
+  const data = char.userData as CharacterData;
+  data.animationState = state;
+  if (data.mixer) {
+    playAnimation(char, state);
+  }
 }
 
 /**
- * Drive the procedural animation for one frame.
+ * Drive the animation mixer for one frame.
  *
- * Each frame resets limbs to neutral, then applies the active state:
- * - walk: legs swing opposite phase via sin(t*8) * 0.5 rad
- * - idle: subtle breathing — upper body Y offset sin(t*2) * 0.02
- * - talk: breathing + head nod sin(t*5) * 0.12 rad
+ * Computes dt from the time parameter (first frame dt=0). The dt is clamped
+ * to MAX_DT to prevent large jumps after a pause (when the main loop skips
+ * updates but clock.elapsedTime keeps advancing).
  *
  * @param char  The Group returned by createCharacter().
  * @param time  Elapsed time in seconds.
  */
 export function updateCharacter(char: THREE.Group, time: number): void {
   const data = char.userData as CharacterData;
-  const state = data.animationState;
+  if (!data.mixer) return;
 
-  // Reset to neutral pose every frame (prevents accumulation drift).
-  data.leftLeg.rotation.x = 0;
-  data.rightLeg.rotation.x = 0;
-  data.bodyGroup.position.y = data.hipHeight;
-  data.head.rotation.x = 0;
+  const dt =
+    data.lastTime > 0 ? Math.min(MAX_DT, Math.max(0, time - data.lastTime)) : 0;
+  data.lastTime = time;
+  data.mixer.update(dt);
+}
 
-  if (state === 'walk') {
-    const swing = Math.sin(time * 8) * 0.5;
-    data.leftLeg.rotation.x = swing;
-    data.rightLeg.rotation.x = -swing;
-  } else if (state === 'idle') {
-    data.bodyGroup.position.y = data.hipHeight + Math.sin(time * 2) * 0.02;
-  } else if (state === 'talk') {
-    data.bodyGroup.position.y = data.hipHeight + Math.sin(time * 2) * 0.02;
-    data.head.rotation.x = Math.sin(time * 5) * 0.12;
-  }
+/**
+ * Simple primitive humanoid fallback (used only if GLB loading fails).
+ *
+ * Creates a static (non-animated) capsule+icosahedron figure so the game
+ * never shows a blank character. The mixer stays null, so updateCharacter
+ * and setAnimation are no-ops.
+ */
+function createFallback(char: THREE.Group, color?: number): void {
+  const bodyColor = color ?? ORIGINAL_COLOR;
+  const skinMat = createToonMaterial(0xf0c8a0);
+  const bodyMat = createToonMaterial(bodyColor);
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.4, 0.8, 4, 8),
+    bodyMat,
+  );
+  body.position.y = 1.2;
+  char.add(body);
+
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), skinMat);
+  head.position.y = 2.1;
+  char.add(head);
+
+  const legGeo = new THREE.CapsuleGeometry(0.15, 0.5, 4, 6);
+  const leftLeg = new THREE.Mesh(legGeo, skinMat);
+  leftLeg.position.set(-0.2, 0.4, 0);
+  char.add(leftLeg);
+  const rightLeg = new THREE.Mesh(legGeo, skinMat);
+  rightLeg.position.set(0.2, 0.4, 0);
+  char.add(rightLeg);
 }

@@ -580,3 +580,48 @@
 - **`createInteraction`'s `_npcGroup` parameter is unused but required** — `createInteraction(player, npcs, questManager)` must pass the NPC group for API signature compatibility, even though `getNearestNpc` uses npc.ts's internal `instances` registry. The parameter is prefixed `_` in interaction.ts. Omitting it would be a type error.
 - **Bundle size warning (562 KB > 500 KB)** — Vite warns about chunks > 500 KB. This is expected: three.js (~150 KB gzip) + 16 game modules + Howler. The warning is harmless for a game. Could be mitigated with manualChunks but that's an optimization, not a correctness issue.
 - **29 modules transformed (up from ~5 in Task 1)** — All 16 task modules + three.js internals + Howler are now in the dependency graph. The dialogue module is a separate chunk (dynamic import from interaction.ts and intro.ts).
+
+# Task 6 Rewrite Learnings — GLB Character Model (Quaternius Animated Human)
+
+## Files Changed
+- `src/character.ts` — REWRITTEN: GLTFLoader async load, SkeletonUtils.clone, toon material swap, AnimationMixer. ~260 lines.
+- `src/player.ts` — Updated: added 'jump' (airborne), 'run' (sprint+moving) animation states. ~10 lines changed.
+- `src/npc.ts` — Updated: `createCharacter(npc.color)` replaces `recolorShirt`; removed `SHIRT_COLOR`/`recolorShirt`. ~15 lines changed.
+
+## Key Decisions
+- **GLTFLoader + SkeletonUtils.clone for skinned meshes** — The Quaternius Animated Human is a single skinned mesh (Human_Mesh, 4733 vertices, 41 bones). `Object3D.clone(true)` does NOT properly clone skinned mesh skeletons — must use `SkeletonUtils.clone()` from `three/examples/jsm/utils/SkeletonUtils.js` which duplicates the skeleton and rebinds it to the cloned mesh.
+- **SkeletonUtils exports named functions, NOT a namespace** — `import { SkeletonUtils } from '...'` fails with TS2305. Must use `import { clone as cloneSkeleton } from '...'`. The module exports `clone`, `retarget`, `retargetClip` as individual named exports.
+- **GLTF cached globally, cloned per character** — `gltfCache` stores the loaded `gltf.scene` + `gltf.animations`. Each `createCharacter()` call clones the scene (SkeletonUtils.clone) and creates a new AnimationMixer. AnimationClip objects are just data (keyframe tracks) and can be shared across mixers. This means 6 characters (1 player + 5 NPCs) = 1 network fetch, 6 clones, 6 mixers.
+- **computeMeshBounds helper — NOT Box3.setFromObject** — CRITICAL: `Box3.setFromObject(model)` for a skinned mesh includes BONE positions (the skeleton's bind pose), not just mesh geometry. The skeleton spans ~364 units while the actual mesh is ~5.5 units tall (mesh local scale 69.18 × geometry height 0.08). Using setFromObject for scale calculation produced a character 66x too small (0.03 units, invisible). Fix: `computeMeshBounds()` traverses only meshes, uses `Box3.setFromBufferAttribute(geometry.attributes.position)` + `applyMatrix4(mesh.matrixWorld)`, unions all mesh boxes.
+- **Single mesh, single material — NPCs uniformly colored** — The GLB has ONE mesh (Human_Mesh) with ONE material. Can't separate clothing/skin/hair by mesh name. Each character gets one `createToonMaterial(color)`. Player = 0xe7e7e7 (original gray), NPCs = their respective `npc.color`. Spec explicitly allows this: "或全部服装统一色".
+- **Animation mapping via case-insensitive name includes** — Quaternius clips are named "Human Armature|Idle", "Human Armature|Walk", etc. The `mapAnimations` function uses `a.name.toLowerCase().includes('idle')` etc. to find clips. 'talk' has no dedicated clip → falls back to 'idle' (per spec).
+- **dt clamping (MAX_DT=0.1)** — When the game is paused (hud.isPaused), the main loop skips `player.update()` and `updateNpcs()`, but `clock.elapsedTime` keeps advancing. On resume, `dt = time - lastTime` would be the entire pause duration, causing a huge animation jump. Clamped to 0.1 seconds (10 fps minimum step).
+- **Async load doesn't block createCharacter return** — `createCharacter()` returns an empty Group immediately; `void loadModel(character, color)` runs async. The caller adds the group to the scene; when the model loads, it's added as a child. `setAnimation()` called before load stores the state; `loadModel` plays it after setup. This preserves the API contract (sync return).
+- **Fallback primitive humanoid** — If GLB loading fails (network/parse error), `createFallback()` creates a simple capsule+icosahedron figure. No mixer (null), so `updateCharacter`/`setAnimation` are no-ops. Character is visible but static — satisfies "不白屏" (no blank screen).
+
+## Animation State Machine (player.ts)
+- `!isGrounded` → 'jump' (airborne, regardless of movement input)
+- `moving && sprinting` → 'run' (Shift+W)
+- `moving` → 'walk' (W only)
+- else → 'idle' (standing still)
+- `sprinting` tracked as a separate boolean (was previously inline in the movement block)
+
+## Verification Results
+- `npx tsc --noEmit`: exit 0
+- `npm run build`: exit 0 (32 modules, 669 KB / 176 KB gzip — up from 562 KB due to GLTFLoader + SkeletonUtils)
+- LSP diagnostics: clean on all 3 changed files
+- Runtime (Playwright + window.__game):
+  - Player: 4733 vertices, 41 bones, isSkinned=true, MeshToonMaterial 0xe7e7e7, mixer=true, 5 clips
+  - Walk: bone rotations change significantly between idle and walk (Hips ry: -0.75→0.08, LeftUpLeg rx: -0.46→0.003), walk cycle progresses between frames
+  - Run: animState="run" with Shift+W ✓
+  - Jump: animState="jump" with Space, player position shows arc (24.73→25.75), returns to idle after landing ✓
+  - NPCs: all 5 use GLB with correct colors (808080/ffd700/4169e1/ffffff/8b4513), all have mixer+5 clips, all idle
+- Evidence: `.omo/evidence/character-glb.txt` + `.omo/evidence/character-glb.png`
+
+## Gotchas
+- **Box3.setFromObject includes bone positions for skinned meshes (CRITICAL)** — This was the main bug. The skeleton's bind pose spans ~364 units (bones are positioned far from origin), while the actual mesh geometry is only ~5.5 units tall (after mesh local scale 69.18). Using `Box3.setFromObject(model)` for scale calculation gave `size.y = 364`, so `scale = 2.0/364 = 0.0055`, making the character 0.03 units tall (invisible). Fix: `computeMeshBounds()` uses `Box3.setFromBufferAttribute` on mesh geometry only, transformed by `matrixWorld`. This gives the correct `size.y = 5.53`, so `scale = 2.0/5.53 = 0.361`.
+- **SkeletonUtils import style** — `import { SkeletonUtils } from 'three/examples/jsm/utils/SkeletonUtils.js'` → TS2305 "no exported member 'SkeletonUtils'". The module exports `clone`, `retarget`, `retargetClip` as named exports. Fix: `import { clone as cloneSkeleton } from '...'`.
+- **Animation clip name prefix** — Quaternius clips are named "Human Armature|Idle", "Human Armature|Walk", etc. (FBX2glTF generator). Matched via `name.toLowerCase().includes('idle')` — the "|" separator means "idle" only matches the suffix, not the prefix.
+- **G3 guardrail relaxed (user-requested)** — The original G3 guardrail required primitive-only geometry. User explicitly requested GLB model enhancement. This is a documented exception.
+- **No changes to main.ts** — `createCharacter` API is unchanged (still returns THREE.Group, same setAnimation/updateCharacter signatures). main.ts integration is transparent.
+- **No changes to interaction.ts** — NPC 'talk' animation is supported in character.ts (maps to idle fallback) but not wired through interaction.ts (MUST NOT DO constraint). Since the GLB has no 'Talk' clip, the visual result is identical whether or not 'talk' is triggered.

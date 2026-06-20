@@ -7,21 +7,18 @@ import { npcs as npcData } from './data/npcs';
 /**
  * Static NPC system — 5 non-player characters placed on the planet sphere.
  *
- * Each NPC reuses the player character model (Task 6) with a recoloured shirt
- * so the five are visually distinguishable. Above every NPC floats a yellow
- * downward-pointing cone marker (the original game's quest-giver indicator)
- * and a red name tag sprite. NPCs are static: they snap to the surface and
- * never move — only the marker floats/spins and the character breathes (idle).
+ * Each NPC uses the GLB character model (Task 6 rewrite) with a distinct
+ * outfit color (NPC.color) so the five are visually distinguishable. Above
+ * every NPC floats a yellow downward-pointing cone marker (the original
+ * game's quest-giver indicator) and a red name tag sprite. NPCs are static:
+ * they snap to the surface and never move — only the marker floats/spins
+ * and the character plays the idle animation.
  *
  * Exports:
  *   createNpcs()                    → THREE.Group containing 5 NPC groups
  *   getNearestNpc(playerPos, thr=3) → nearest NPC group within threshold | null
  *   updateNpcs(time)                → per-frame marker + idle animation
  */
-
-// createCharacter() uses 0xffdd00 for the shirt (body + arms). We swap that
-// material for NPC.color so each NPC wears a distinct shirt.
-const SHIRT_COLOR = 0xffdd00;
 
 const MARKER_COLOR = 0xffd700; // yellow
 const MARKER_RADIUS = 0.3;
@@ -41,24 +38,6 @@ interface NpcInstance {
 // Module-level registry populated by createNpcs, consumed by getNearestNpc
 // and updateNpcs. Cleared on each createNpcs call to avoid stale references.
 const instances: NpcInstance[] = [];
-
-/**
- * Replace the character's shirt material with a toon material of the given
- * colour. createCharacter() shares one shirt material across the torso and
- * both arms; we identify those meshes by matching the original shirt colour
- * and swap in a single new shared material.
- */
-function recolorShirt(char: THREE.Group, color: number): void {
-  const shirtMat = createToonMaterial(color);
-  char.traverse((obj) => {
-    if (obj instanceof THREE.Mesh) {
-      const mat = obj.material as THREE.MeshToonMaterial;
-      if (mat.color && mat.color.getHex() === SHIRT_COLOR) {
-        obj.material = shirtMat;
-      }
-    }
-  });
-}
 
 /**
  * Draw a rounded rectangle path on a 2D canvas context.
@@ -139,9 +118,7 @@ export function createNpcs(): THREE.Group {
   for (const data of npcData) {
     const npcGroup = new THREE.Group();
 
-    // Character model with recoloured shirt.
-    const character = createCharacter();
-    recolorShirt(character, data.color);
+    const character = createCharacter(data.color);
     setAnimation(character, 'idle');
     npcGroup.add(character);
 
