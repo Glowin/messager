@@ -7,6 +7,8 @@ import { AudioManager } from './audio';
 
 const FORWARD_SPEED = 0.2;
 const STRAFE_SPEED = 0.2;
+const CAMERA_TURN_SPEED = 0.05; // < STRAFE_SPEED — camera yaws slower than character
+const LOCAL_UP = new THREE.Vector3(0, 1, 0); // local Y = surface normal (player up)
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
 const GROUND_THRESHOLD = 0.01;
@@ -161,8 +163,8 @@ export function createPlayer(_world?: unknown): Player {
       }
 
       // Strafe (A/D): rotate around forward axis — keeps group forward (and
-      // thus camera view) fixed. strafeDir=+1 (D) → -θ → +X (right);
-      // strafeDir=-1 (A) → +θ → -X (left).
+      // thus camera view) fixed. strafeDir=+1 (D) → +θ → right;
+      // strafeDir=-1 (A) → -θ → left.
       const strafeDir =
         (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0);
       if (strafeDir !== 0) {
@@ -172,6 +174,12 @@ export function createPlayer(_world?: unknown): Player {
         group.position.applyQuaternion(_q);
         group.quaternion.premultiply(_q);
         moving = true;
+
+        // Camera yaw: turns the view in the same direction as the strafe,
+        // but at a smaller rate than the character's facing change.
+        // A (strafeDir=-1, left)  → +yaw (camera left)
+        // D (strafeDir=+1, right) → -yaw (camera right)
+        group.rotateOnAxis(LOCAL_UP, -CAMERA_TURN_SPEED * strafeDir * dt);
       }
     }
 
