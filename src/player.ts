@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createCharacter, setAnimation, updateCharacter } from './character';
+import { createCharacter, setAnimation, setFacing, updateCharacter } from './character';
 import type { AnimationState } from './character';
 import { planetRadius, snapToSurface, getSurfaceNormal } from './world';
 import { applyGravity } from './gravity';
@@ -62,7 +62,6 @@ export function createPlayer(_world?: unknown): Player {
   let jumpRequested = false;
   let isGrounded = true;
   let currentAnim: AnimationState = 'idle';
-  let facingBackward = false;
 
   function onKeyDown(e: KeyboardEvent): void {
     const action = KEY_MAP[e.code];
@@ -137,20 +136,16 @@ export function createPlayer(_world?: unknown): Player {
         group.rotateOnAxis(LOCAL_UP, -TURN_SPEED * dt);
       }
 
-      // Turn to face movement direction (no moonwalk): S turns 180°, W turns back.
       const wantForward = input.forward && !input.backward;
       const wantBackward = input.backward && !input.forward;
 
-      if (wantForward && facingBackward) {
-        group.rotateOnAxis(LOCAL_UP, Math.PI);
-        facingBackward = false;
-      }
-      if (wantBackward && !facingBackward) {
-        group.rotateOnAxis(LOCAL_UP, Math.PI);
-        facingBackward = true;
+      if (wantForward) {
+        setFacing(group, false);
+      } else if (wantBackward) {
+        setFacing(group, true);
       }
 
-      const moveDir = (wantForward || wantBackward) ? 1 : 0;
+      const moveDir = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
       if (moveDir !== 0) {
         group.getWorldDirection(_forward);
         _axis.crossVectors(_up, _forward);

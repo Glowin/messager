@@ -29,6 +29,8 @@ interface CharacterData {
   clips: Map<AnimationState, THREE.AnimationClip>;
   currentAction: THREE.AnimationAction | null;
   lastTime: number;
+  model: THREE.Group | null;
+  facingBackward: boolean;
 }
 
 const MODEL_URL = '/models/character.glb';
@@ -65,6 +67,8 @@ export function createCharacter(color?: number): THREE.Group {
     clips: new Map<AnimationState, THREE.AnimationClip>(),
     currentAction: null,
     lastTime: 0,
+    model: null,
+    facingBackward: false,
   } as CharacterData;
 
   void loadModel(character, color);
@@ -150,6 +154,8 @@ async function loadModel(
     const data = character.userData as CharacterData;
     data.mixer = mixer;
     data.clips = clips;
+    data.model = model;
+    model.rotation.y = data.facingBackward ? Math.PI : 0;
 
     character.add(model);
 
@@ -222,6 +228,19 @@ export function setAnimation(char: THREE.Group, state: AnimationState): void {
   data.animationState = state;
   if (data.mixer) {
     playAnimation(char, state);
+  }
+}
+
+/**
+ * Set whether the character model faces backward (away from the group's
+ * forward direction). Only rotates the GLB model child (single-axis Y), not
+ * the group — so the camera view and movement math are unaffected.
+ */
+export function setFacing(char: THREE.Group, backward: boolean): void {
+  const data = char.userData as CharacterData;
+  data.facingBackward = backward;
+  if (data.model) {
+    data.model.rotation.y = backward ? Math.PI : 0;
   }
 }
 
