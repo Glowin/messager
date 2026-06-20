@@ -3,12 +3,16 @@ import { createCharacter, setAnimation, updateCharacter } from './character';
 import type { AnimationState } from './character';
 import { planetRadius, snapToSurface, getSurfaceNormal } from './world';
 import { applyGravity } from './gravity';
+import { AudioManager } from './audio';
 
 const FORWARD_SPEED = 3.0;
 const TURN_SPEED = 2.0;
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
 const GROUND_THRESHOLD = 0.01;
+const FOOTSTEP_INTERVAL = 0.35;
+
+let footstepTimer = 0;
 
 export interface InputState {
   forward: boolean;
@@ -107,6 +111,7 @@ export function createPlayer(_world?: unknown): Player {
     if (enabled && jumpRequested && isGrounded) {
       velocity.copy(_up).multiplyScalar(JUMP_FORCE);
       isGrounded = false;
+      AudioManager.playSfx('jump');
     }
     jumpRequested = false;
 
@@ -145,6 +150,16 @@ export function createPlayer(_world?: unknown): Player {
 
     if (isGrounded) {
       snapToSurface(group.position, 0);
+    }
+
+    if (moving && isGrounded) {
+      footstepTimer += dt;
+      if (footstepTimer >= FOOTSTEP_INTERVAL) {
+        footstepTimer = 0;
+        AudioManager.playSfx('footstep');
+      }
+    } else {
+      footstepTimer = 0;
     }
 
     const newAnim: AnimationState = moving ? 'walk' : 'idle';

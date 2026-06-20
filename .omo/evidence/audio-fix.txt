@@ -1,0 +1,53 @@
+Audio Fix — Wiring BGM + Missing SFX
+=====================================
+Date: 2026-06-20
+
+ROOT CAUSE
+- AudioManager.playBgm() was never called (BGM never started).
+- Only 'quest-complete' SFX was wired (quest.ts:69).
+- 'jump', 'footstep', 'dialogue' SFX were never triggered.
+
+FIXES APPLIED
+1. BGM start (src/main.ts):
+   - Added `import { AudioManager } from './audio';`
+   - Added `AudioManager.playBgm();` in the createIntro onStart callback
+     (after hud.show() + player.setEnabled(true)) — fires when entering
+     the playing state, after Begin → intro dialogue. resume() is called
+     in intro.ts on Begin click (unlocks AudioContext); playBgm() is
+     idempotent (no-op if already playing).
+
+2. Jump SFX (src/player.ts):
+   - Added `import { AudioManager } from './audio';`
+   - In update(), inside `if (enabled && jumpRequested && isGrounded)`:
+     added `AudioManager.playSfx('jump');`
+
+3. Footstep SFX — throttled (src/player.ts):
+   - Added module-level `const FOOTSTEP_INTERVAL = 0.35;` and
+     `let footstepTimer = 0;`
+   - After the movement block, when `moving && isGrounded`: accumulate
+     `footstepTimer += dt`; play 'footstep' and reset to 0 when
+     `footstepTimer >= FOOTSTEP_INTERVAL`. Reset to 0 when not moving.
+     (NOT every frame — throttled to ~every 0.35s.)
+
+4. Dialogue advance SFX (src/ui/dialogue.ts):
+   - Added `import { AudioManager } from '../audio';` (audio.ts has no
+     CSS import, so static import is safe alongside dialogue.css import.)
+   - In advance(), before `showLine(s, s.index)`: added
+     `AudioManager.playSfx('dialogue');` — plays when advancing to a new
+     line (not on typewriter-skip or dialogue-complete).
+
+UNCHANGED
+- audio.ts (AudioManager already correct, just wasn't called).
+- Audio files.
+- HUD mute toggle (hud.ts) — still calls AudioManager.setMuted().
+
+VERIFICATION
+- grep confirms wiring:
+    main.ts:67      AudioManager.playBgm();
+    player.ts:114   AudioManager.playSfx('jump');
+    player.ts:159   AudioManager.playSfx('footstep');
+    dialogue.ts:119 AudioManager.playSfx('dialogue');
+- `npx tsc --noEmit` → exit 0 (no errors).
+- `npm run build` → exit 0 (tsc + vite build both pass; 29 modules
+  transformed; built in 600ms).
+- LSP diagnostics clean on main.ts, player.ts, dialogue.ts.

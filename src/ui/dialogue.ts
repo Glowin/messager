@@ -1,4 +1,5 @@
 import type { DialogueLine } from '../types';
+import { AudioManager } from '../audio';
 import './dialogue.css';
 
 interface DialogueState {
@@ -115,6 +116,7 @@ function advance(): void {
     return;
   }
 
+  AudioManager.playSfx('dialogue');
   showLine(s, s.index);
 }
 

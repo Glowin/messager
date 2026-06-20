@@ -10,6 +10,7 @@ import { questManager } from './quest';
 import { createInteraction } from './interaction';
 import { createHud } from './ui/hud';
 import { createIntro } from './intro';
+import { AudioManager } from './audio';
 import { installDebugApi, tickFps } from './debug-api';
 import type { GameState } from './debug-api';
 
@@ -63,6 +64,7 @@ player.setEnabled(false);
 const intro = createIntro(() => {
   hud.show();
   player.setEnabled(true);
+  AudioManager.playBgm();
 });
 
 // --- Debug API (window.__game, DEV only) ---
