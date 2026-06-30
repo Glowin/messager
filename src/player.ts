@@ -130,17 +130,19 @@ export function createPlayer(_world?: unknown): Player {
       sprinting = input.sprint;
       const speedMul = sprinting ? SPRINT_MULTIPLIER : 1.0;
 
-      // Determine facing angle from movement input.
-      // Priority: forward > backward > left > right > keep last.
+      // Determine facing angle from COMBINED movement input (not priority).
+      // Local frame: +Z = forward, +X = right.
+      // A strafes +X (screen left), D strafes -X (screen right) — see strafe
+      // math below. atan2(moveX, moveZ) yields the angle from +Z toward +X,
+      // so the character faces the combined movement direction:
+      //   W→0, S→π, A→+π/2, D→-π/2, W+A→+π/4 (forward-left diagonal), etc.
+      const moveX =
+        (input.turnLeft ? 1 : 0) - (input.turnRight ? 1 : 0); // A→+X, D→-X
+      const moveZ =
+        (input.forward ? 1 : 0) - (input.backward ? 1 : 0); // W→+Z, S→-Z
       let facing = lastFacing;
-      if (input.forward) {
-        facing = 0;
-      } else if (input.backward) {
-        facing = Math.PI;
-      } else if (input.turnLeft) {
-        facing = -Math.PI / 2;
-      } else if (input.turnRight) {
-        facing = Math.PI / 2;
+      if (moveX !== 0 || moveZ !== 0) {
+        facing = Math.atan2(moveX, moveZ);
       }
       if (facing !== lastFacing) {
         setFacing(group, facing);
