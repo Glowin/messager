@@ -8,6 +8,7 @@ import { AudioManager } from './audio';
 const FORWARD_SPEED = 0.2;
 const STRAFE_SPEED = 0.2;
 const CAMERA_TURN_SPEED = 0.15; // < STRAFE_SPEED — camera yaws slower than character
+const ACCEL_RATE = 8; // movement acceleration/deceleration rate
 const LOCAL_UP = new THREE.Vector3(0, 1, 0); // local Y = surface normal (player up)
 const JUMP_FORCE = 6.0;
 const SPRINT_MULTIPLIER = 1.8;
@@ -63,6 +64,9 @@ export function createPlayer(_world?: unknown): Player {
   let isGrounded = true;
   let currentAnim: AnimationState = 'idle';
   let lastFacing = 0;
+  let speedFactor = 0;
+  let lastMoveDir = 0;
+  let lastStrafeDir = 0;
 
   function onKeyDown(e: KeyboardEvent): void {
     const action = KEY_MAP[e.code];
@@ -123,6 +127,10 @@ export function createPlayer(_world?: unknown): Player {
       isGrounded = true;
     }
 
+    if (!isGrounded) {
+      speedFactor = 0;
+    }
+
     let moving = false;
     let sprinting = false;
     if (isGrounded && enabled) {
@@ -149,39 +157,55 @@ export function createPlayer(_world?: unknown): Player {
         lastFacing = facing;
       }
 
-      // Forward / backward.
       const moveDir = (input.forward ? 1 : 0) - (input.backward ? 1 : 0);
-      if (moveDir !== 0) {
-        group.getWorldDirection(_forward);
-        _axis.crossVectors(_up, _forward);
-        if (_axis.lengthSq() > 1e-10) {
-          _axis.normalize();
-          const angle = FORWARD_SPEED * speedMul * moveDir * dt;
-          _q.setFromAxisAngle(_axis, angle);
+      const strafeDir =
+        (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0);
+      const hasInput = moveDir !== 0 || strafeDir !== 0;
+      if (moveDir !== 0) lastMoveDir = moveDir;
+      if (strafeDir !== 0) lastStrafeDir = strafeDir;
+
+      const targetFactor = hasInput ? 1 : 0;
+      speedFactor = THREE.MathUtils.lerp(
+        speedFactor,
+        targetFactor,
+        1 - Math.exp(-ACCEL_RATE * dt),
+      );
+
+      if (speedFactor > 0.01) {
+        const effMove = hasInput ? moveDir : lastMoveDir;
+        const effStrafe = hasInput ? strafeDir : lastStrafeDir;
+
+        if (effMove !== 0) {
+          group.getWorldDirection(_forward);
+          _axis.crossVectors(_up, _forward);
+          if (_axis.lengthSq() > 1e-10) {
+            _axis.normalize();
+            const angle =
+              FORWARD_SPEED * speedMul * effMove * dt * speedFactor;
+            _q.setFromAxisAngle(_axis, angle);
+            group.position.applyQuaternion(_q);
+            group.quaternion.premultiply(_q);
+            moving = true;
+          }
+        }
+
+        if (effStrafe !== 0) {
+          group.getWorldDirection(_forward);
+          const angle =
+            STRAFE_SPEED * speedMul * effStrafe * dt * speedFactor;
+          _q.setFromAxisAngle(_forward, angle);
           group.position.applyQuaternion(_q);
           group.quaternion.premultiply(_q);
           moving = true;
+
+          // A (strafeDir=-1) → +yaw (camera left), D (+1) → -yaw (camera right)
+          if (hasInput) {
+            group.rotateOnAxis(
+              LOCAL_UP,
+              -CAMERA_TURN_SPEED * strafeDir * dt * speedFactor,
+            );
+          }
         }
-      }
-
-      // Strafe (A/D): rotate around forward axis — keeps group forward (and
-      // thus camera view) fixed. strafeDir=+1 (D) → +θ → right;
-      // strafeDir=-1 (A) → -θ → left.
-      const strafeDir =
-        (input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0);
-      if (strafeDir !== 0) {
-        group.getWorldDirection(_forward);
-        const angle = STRAFE_SPEED * speedMul * strafeDir * dt;
-        _q.setFromAxisAngle(_forward, angle);
-        group.position.applyQuaternion(_q);
-        group.quaternion.premultiply(_q);
-        moving = true;
-
-        // Camera yaw: turns the view in the same direction as the strafe,
-        // but at a smaller rate than the character's facing change.
-        // A (strafeDir=-1, left)  → +yaw (camera left)
-        // D (strafeDir=+1, right) → -yaw (camera right)
-        group.rotateOnAxis(LOCAL_UP, -CAMERA_TURN_SPEED * strafeDir * dt);
       }
     }
 

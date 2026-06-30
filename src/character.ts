@@ -36,6 +36,7 @@ interface CharacterData {
 const MODEL_URL = '/models/character.glb';
 const TARGET_HEIGHT = 2.0; // world units — character fits camera framing
 const MAX_DT = 0.1; // clamp mixer dt to prevent post-pause animation jumps
+const FACING_RATE = 12; // facing interpolation rate (higher = faster turn)
 const ORIGINAL_COLOR = 0xe7e7e7; // GLB's original material color (fallback)
 
 /** Cached GLTF result so the model is fetched only once. */
@@ -160,7 +161,7 @@ async function loadModel(
     character.add(model);
 
     // Play the initial (or previously-requested) animation state.
-    playAnimation(character, data.animationState);
+    playAnimation(character, data.animationState, 'idle');
   } catch (e) {
     console.warn('[character] GLB load failed, using primitive fallback:', e);
     createFallback(character, color);
@@ -196,7 +197,11 @@ function mapAnimations(
 }
 
 /** Stop the current action and play the clip for the given state. */
-function playAnimation(char: THREE.Group, state: AnimationState): void {
+function playAnimation(
+  char: THREE.Group,
+  state: AnimationState,
+  prevState: AnimationState,
+): void {
   const data = char.userData as CharacterData;
   if (!data.mixer) return;
 
@@ -206,10 +211,12 @@ function playAnimation(char: THREE.Group, state: AnimationState): void {
   const newAction = data.mixer.clipAction(clip);
   if (data.currentAction === newAction) return;
 
+  const fadeDuration = prevState === 'jump' ? 0.4 : 0.3;
+
   if (data.currentAction) {
     newAction.reset();
     newAction.play();
-    data.currentAction.crossFadeTo(newAction, 0.2, false); // 0.2s smooth fade
+    data.currentAction.crossFadeTo(newAction, fadeDuration, false);
   } else {
     newAction.reset().play();
   }
@@ -225,9 +232,10 @@ function playAnimation(char: THREE.Group, state: AnimationState): void {
  */
 export function setAnimation(char: THREE.Group, state: AnimationState): void {
   const data = char.userData as CharacterData;
+  const prevState = data.animationState;
   data.animationState = state;
   if (data.mixer) {
-    playAnimation(char, state);
+    playAnimation(char, state, prevState);
   }
 }
 
@@ -242,29 +250,34 @@ export function setAnimation(char: THREE.Group, state: AnimationState): void {
 export function setFacing(char: THREE.Group, yAngle: number): void {
   const data = char.userData as CharacterData;
   data.facingAngle = yAngle;
-  if (data.model) {
-    data.model.rotation.y = yAngle;
-  }
 }
 
-/**
- * Drive the animation mixer for one frame.
- *
- * Computes dt from the time parameter (first frame dt=0). The dt is clamped
- * to MAX_DT to prevent large jumps after a pause (when the main loop skips
- * updates but clock.elapsedTime keeps advancing).
- *
- * @param char  The Group returned by createCharacter().
- * @param time  Elapsed time in seconds.
- */
+function lerpAngle(current: number, target: number, t: number): number {
+  let diff = target - current;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  return current + diff * t;
+}
+
 export function updateCharacter(char: THREE.Group, time: number): void {
   const data = char.userData as CharacterData;
-  if (!data.mixer) return;
 
   const dt =
     data.lastTime > 0 ? Math.min(MAX_DT, Math.max(0, time - data.lastTime)) : 0;
   data.lastTime = time;
-  data.mixer.update(dt);
+
+  if (data.mixer) {
+    data.mixer.update(dt);
+  }
+
+  if (data.model && dt > 0) {
+    const t = 1 - Math.exp(-FACING_RATE * dt);
+    data.model.rotation.y = lerpAngle(
+      data.model.rotation.y,
+      data.facingAngle,
+      t,
+    );
+  }
 }
 
 /**
